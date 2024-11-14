@@ -1,10 +1,11 @@
 mod telemetry;
+use clap::Parser;
 use futures::StreamExt;
 use libp2p::{
     floodsub::{Floodsub, Topic},
     gossipsub::{self, MessageAuthenticity},
     identity::Keypair,
-    kad::{self, store::MemoryStore},
+    kad::{self, store::MemoryStore, Mode, RecordKey},
     swarm::{behaviour, NetworkBehaviour, SwarmEvent},
     Multiaddr, PeerId,
 };
@@ -15,10 +16,19 @@ use std::{
     time::Duration,
 };
 use telemetry::TRACING;
-use tokio::io::AsyncBufReadExt;
+use tokio::io::{AsyncBufReadExt, BufReader, Lines, Stdin};
 use tracing::warn;
 
 type MainResult<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync + 'static>>;
+
+#[derive(Parser, Debug)]
+#[command(version, about, long_about = None)]
+pub struct Args {
+    #[arg(name = "Dial Address")]
+    pub dial_addr: Option<String>,
+    #[arg(short = 's')]
+    pub server: bool,
+}
 
 static KEYS: LazyLock<Keypair> = LazyLock::new(|| Keypair::generate_ed25519());
 static PEER_ID: LazyLock<PeerId> = LazyLock::new(|| PeerId::from(KEYS.public()));
@@ -56,9 +66,18 @@ impl Behaviour {
     }
 }
 
+async fn read_stdin_opt(stdinopt: &mut Option<Lines<BufReader<Stdin>>>) -> Option<String> {
+    if let Some(stdin) = stdinopt.as_mut() {
+        return stdin.next_line().await.expect("failed to read stdin");
+    }
+    None
+}
+
 #[tokio::main]
 async fn main() -> MainResult<()> {
     LazyLock::force(&TRACING);
+    let args = Args::parse();
+    warn!("args: {args:#?}");
     let local_id = LazyLock::force(&PEER_ID);
 
     warn!("Peer Id: {}", &local_id);
@@ -76,15 +95,28 @@ async fn main() -> MainResult<()> {
 
     let topic = gossipsub::IdentTopic::new("test-net");
     swarm.behaviour_mut().gossip.subscribe(&topic)?;
+    // THIS IS HOW YOU DO HETEROGENEOUS
+    let mut stdinopt = None;
+    if args.server {
+        warn!("making this node a server");
+        swarm.behaviour_mut().kad.set_mode(Some(Mode::Server));
 
-    let mut stdin = tokio::io::BufReader::new(tokio::io::stdin()).lines();
+        let id = swarm
+            .behaviour_mut()
+            .kad
+            .start_providing(RecordKey::new(b"some_model"))
+            .expect("failed to make node a provider");
+    } else {
+        stdinopt = Some(tokio::io::BufReader::new(tokio::io::stdin()).lines());
+    }
+
     // Tell the swarm to listen on all interfaces and a random, OS-assigned
     // port.
     swarm.listen_on("/ip4/0.0.0.0/tcp/0".parse()?)?;
 
     // Dial the peer identified by the multi-address given as the second
     // command-line argument, if any.
-    if let Some(addr) = std::env::args().nth(1) {
+    if let Some(addr) = args.dial_addr {
         let remote: Multiaddr = addr.parse()?;
         swarm.dial(remote)?;
         warn!("Dialed {addr}")
@@ -92,36 +124,34 @@ async fn main() -> MainResult<()> {
 
     loop {
         tokio::select! {
-            Ok(Some(line)) = stdin.next_line() => {
-                let message = Message::CompletionReq{model_id: 0, prompt: &line};
-                let json_byte_vec = serde_json::to_vec(&message).expect("failed serialization of message");
-                if let Err(e) = swarm
-                    .behaviour_mut().gossip
-                    .publish(topic.clone(), json_byte_vec) {
-                    warn!("Publish error: {e:?}");
+                Some(line) = read_stdin_opt(&mut stdinopt) => {
+                    let message = Message::CompletionReq{model_id: 0, prompt: &line};
+                    let json_byte_vec = serde_json::to_vec(&message).expect("failed serialization of message");
+                    if let Err(e) = swarm
+                        .behaviour_mut().gossip
+                        .publish(topic.clone(), json_byte_vec) {
+                        warn!("Publish error: {e:?}");
+                    }
                 }
-            }
+
             event = swarm.select_next_some() => match event {
 
             SwarmEvent::NewListenAddr { address, .. } => warn!("Listening on {address:?}"),
             SwarmEvent::Behaviour(beh_event) => {
-                    match beh_event {
-                        BehaviourEvent::Gossip(gossipsub::Event::Message {
-                            propagation_source,
-                            message_id,
-                            message
-                        }) => {
-                            let deserialized: Message = serde_json::from_slice(&message.data).expect("failed to deserialize");
-                    warn!("Got message: '{deserialized:#?}' with id: {message_id} from peer: {propagation_source}",
-                        );
-                },
-                        BehaviourEvent::Kad(kad_e) => {
-                    warn!("kad event: {kad_e:#?}");
-                },
-            _ => {warn!("unhandled behavior event: {beh_event:#?}");}
+                match beh_event {
+                    BehaviourEvent::Gossip(gossipsub::Event::Message {
+                        propagation_source,
+                        message_id,
+                        message
+                    }) => {
+                        let deserialized: Message = serde_json::from_slice(&message.data).expect("failed to deserialize");
+                        warn!("Got message: '{deserialized:#?}' with id: {message_id} from peer: {propagation_source}");
+                    },
+                    BehaviourEvent::Kad(kad_e) => { warn!("kad event: {kad_e:#?}"); },
+                    _ => {warn!("unhandled behavior event: {beh_event:#?}");}
 
-                    }
-                },
+                }
+            },
             SwarmEvent::ConnectionEstablished { peer_id, .. } => {
                 warn!("New connection to peer: {peer_id:#?}")
             }
