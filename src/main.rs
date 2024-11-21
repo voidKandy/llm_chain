@@ -1,23 +1,20 @@
+mod behavior;
+mod chain;
+mod node;
 mod telemetry;
+use behavior::{handle_swarm_event, CompletionReq, SysBehaviour};
+use chain::block::GENESIS_BLOCK;
 use clap::Parser;
 use futures::StreamExt;
 use libp2p::{
-    gossipsub::{self, MessageAuthenticity},
-    identify,
+    gossipsub,
     identity::Keypair,
-    kad::{self, store::MemoryStore, Mode, QueryId, QueryResult, RecordKey},
-    swarm::{NetworkBehaviour, SwarmEvent},
-    Multiaddr, PeerId, StreamProtocol, Swarm,
+    kad::{Mode, RecordKey},
+    Multiaddr, PeerId,
 };
-use serde::{Deserialize, Serialize};
-use std::{
-    hash::{DefaultHasher, Hash, Hasher},
-    str::FromStr,
-    sync::LazyLock,
-    time::Duration,
-};
+use node::{Node, NodeType};
+use std::{sync::LazyLock, time::Duration};
 use telemetry::TRACING;
-use tokio::io::{AsyncBufReadExt, BufReader, Lines, Stdin};
 use tracing::warn;
 
 type MainResult<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync + 'static>>;
@@ -27,136 +24,22 @@ type MainResult<T> = std::result::Result<T, Box<dyn std::error::Error + Send + S
 pub struct Args {
     #[arg(name = "Dial Address")]
     pub dial_addr: Option<String>,
+    /// if true, provider
+    /// if false, validator
+    /// if none, client
     #[arg(short = 's')]
-    pub server: bool,
+    pub server: Option<bool>,
 }
-
-static KEYS: LazyLock<Keypair> = LazyLock::new(|| Keypair::generate_ed25519());
-static PEER_ID: LazyLock<PeerId> = LazyLock::new(|| PeerId::from(KEYS.public()));
 
 // these should be mapped to real models down the line
 const MODEL_ID_0: &str = "model_0";
 const MODEL_ID_1: &str = "model_1";
-#[derive(Debug, Deserialize, Serialize)]
-enum Message<'m> {
-    CompletionReq { model_id: u8, prompt: &'m str },
-}
 
-#[derive(NetworkBehaviour)]
-struct SysBehaviour {
-    gossip: gossipsub::Behaviour,
-    kad: kad::Behaviour<MemoryStore>,
-    identify: identify::Behaviour,
-}
-
-#[derive(Debug, Default)]
-struct ClientNodeData {
-    stdin: Option<Lines<BufReader<Stdin>>>,
-    model_prompt: Option<String>,
-    provider_query: Option<QueryId>,
-}
-
-const IDENTIFY_ID: &str = "/ipfs/id/1.0.0";
-impl SysBehaviour {
-    fn new(peer_id: PeerId, key: Keypair) -> Self {
-        let message_id_fn = |message: &gossipsub::Message| {
-            let mut s = DefaultHasher::new();
-            message.data.hash(&mut s);
-            gossipsub::MessageId::from(s.finish().to_string())
-        };
-        let identify =
-            identify::Behaviour::new(identify::Config::new(IDENTIFY_ID.to_string(), key.public()));
-
-        let peer_store = MemoryStore::new(peer_id);
-        let gossip_config = gossipsub::ConfigBuilder::default()
-            .message_id_fn(message_id_fn)
-            .build()
-            .expect("failed to build gossip config");
-
-        let gossip =
-            gossipsub::Behaviour::new(MessageAuthenticity::Signed(key), gossip_config).unwrap();
-
-        let mut kad_config = kad::Config::new(StreamProtocol::new("/idontknowhwhattocallthis"));
-
-        // Good for debugging, by default this is set to 5 mins
-        // kad_config.set_periodic_bootstrap_interval(Some(Duration::from_secs(10)));
-
-        let kad = kad::Behaviour::<MemoryStore>::with_config(peer_id, peer_store, kad_config);
-
-        SysBehaviour {
-            gossip,
-            kad,
-            identify,
-        }
-    }
-}
-
-async fn read_stdin_opt(stdinopt: &mut Option<Lines<BufReader<Stdin>>>) -> Option<String> {
-    if let Some(stdin) = stdinopt.as_mut() {
-        return stdin.next_line().await.expect("failed to read stdin");
-    }
-    None
-}
-
-async fn handle_swarm_event(
-    swarm: &mut Swarm<SysBehaviour>,
-    client_node_data: &mut ClientNodeData,
-    event: SwarmEvent<SysBehaviourEvent>,
-) {
-    match event {
-        SwarmEvent::NewListenAddr { address, .. } => warn!("Listening on {address:?}"),
-        SwarmEvent::Behaviour(beh_event) => {
-            match beh_event {
-                SysBehaviourEvent::Gossip(gossipsub::Event::Message {
-                    propagation_source,
-                    message_id,
-                    message,
-                }) => {
-                    let deserialized: Message =
-                        serde_json::from_slice(&message.data).expect("failed to deserialize");
-
-                    warn!("Got message: '{deserialized:#?}' with id: {message_id} from peer: {propagation_source}");
-                }
-                SysBehaviourEvent::Kad(kad_e) => match kad_e {
-                    kad::Event::OutboundQueryProgressed {
-                        id,
-                        result,
-                        stats,
-                        step,
-                    } => {
-                        // if client_node_data.provider_query == Some(id) {
-                        //     warn!("client node found a provider:\nresult={result:#?}\nstats={stats:#?}");
-                        // }
-                        match result {
-                            QueryResult::StartProviding(res) => {
-                                warn!("started providing: {res:#?}");
-                            }
-                            QueryResult::GetProviders(res) => {
-                                warn!("get providers result: {res:#?}");
-                            }
-                            _ => {}
-                        }
-                    }
-                    _ => {
-                        warn!("kad event: {kad_e:#?}");
-                    }
-                },
-                _ => {
-                    warn!("unhandled behavior event: {beh_event:#?}");
-                }
-            }
-        }
-        SwarmEvent::ConnectionEstablished { peer_id, .. } => {
-            warn!("New connection to peer: {peer_id:#?}")
-        }
-        SwarmEvent::ConnectionClosed { peer_id, .. } => {
-            warn!("Closed connection to peer: {peer_id:#?}")
-        }
-        event => {
-            tracing::error!("Unhandled Event: {event:#?}");
-        }
-    }
-}
+static KEYS: LazyLock<Keypair> = LazyLock::new(|| Keypair::generate_ed25519());
+static PEER_ID: LazyLock<PeerId> = LazyLock::new(|| PeerId::from(KEYS.public()));
+pub const CHAIN_TOPIC: &str = "chain_updates";
+pub const TX_TOPIC: &str = "transactions";
+pub const COMPLETION_TOPIC: &str = "completions";
 
 #[tokio::main]
 async fn main() -> MainResult<()> {
@@ -164,8 +47,6 @@ async fn main() -> MainResult<()> {
     let args = Args::parse();
     warn!("args: {args:#?}");
     let local_id = LazyLock::force(&PEER_ID);
-
-    let mut client_node_data = ClientNodeData::default();
 
     warn!("Peer Id: {}", &local_id);
 
@@ -180,51 +61,86 @@ async fn main() -> MainResult<()> {
         .with_swarm_config(|cfg| cfg.with_idle_connection_timeout(Duration::from_secs(u64::MAX)))
         .build();
 
-    let topic = gossipsub::IdentTopic::new("test-net");
-    swarm.behaviour_mut().gossip.subscribe(&topic)?;
-    let key = RecordKey::new(&MODEL_ID_0);
+    let chain_topic = gossipsub::IdentTopic::new(CHAIN_TOPIC);
+    let comp_topic = gossipsub::IdentTopic::new(COMPLETION_TOPIC);
+    swarm.behaviour_mut().gossip.subscribe(&chain_topic)?;
+    let mut node = {
+        match args.server {
+            Some(true) => {
+                swarm.behaviour_mut().kad.set_mode(Some(Mode::Server));
+                // completely arbitrary rn, not quite sure how to implement model
+                // providing yet
+                let key = RecordKey::new(&MODEL_ID_0);
 
-    if args.server {
-        swarm.behaviour_mut().kad.set_mode(Some(Mode::Server));
+                swarm.behaviour_mut().gossip.subscribe(&comp_topic)?;
+                let qid = swarm
+                    .behaviour_mut()
+                    .kad
+                    .start_providing(key.clone())
+                    .expect("failed to make node a provider");
 
-        let qid = swarm
-            .behaviour_mut()
-            .kad
-            .start_providing(key.clone())
-            .expect("failed to make node a provider");
+                warn!("making this node a server, qid: {qid:#?}");
 
-        warn!("making this node a server, qid: {qid:#?}");
-    } else {
-        client_node_data.stdin = Some(tokio::io::BufReader::new(tokio::io::stdin()).lines());
-    }
+                // temporary behavior to make testing easier
+                let b = &GENESIS_BLOCK;
+                let gen_block = LazyLock::force(b).clone();
+                Node::new(NodeType::Provider, vec![gen_block])
+            }
+            Some(false) => {
+                let tx_topic = gossipsub::IdentTopic::new(TX_TOPIC);
+                swarm.behaviour_mut().gossip.subscribe(&tx_topic)?;
+                warn!("creating validator node");
+                Node::new(NodeType::Validator { tx_pool: vec![] }, vec![])
+            }
+            None => {
+                warn!("creating client node");
+                Node::new(NodeType::new_client(), vec![])
+            }
+        }
+    };
 
     swarm.listen_on("/ip4/0.0.0.0/tcp/0".parse()?)?;
+    warn!("listening");
     if let Some(addr) = args.dial_addr {
         let remote: Multiaddr = addr.parse()?;
         swarm.dial(remote)?;
         warn!("Dialed {addr}")
-    } else {
     }
 
     loop {
-        tokio::select! {
-            Some(line) = read_stdin_opt(&mut client_node_data.stdin) => {
-                client_node_data.provider_query= Some(swarm
-                    .behaviour_mut()
-                    .kad
-                    .get_providers(key.clone()));
-                client_node_data.model_prompt = Some(line);
-                warn!("updated client node: {client_node_data:#?}");
-
-                // let message = Message::CompletionReq{model_id: MODEL_ID_0, prompt: &line};
-                // let json_byte_vec = serde_json::to_vec(&message).expect("failed serialization of message");
-                // if let Err(e) = swarm
-                //     .behaviour_mut().gossip
-                //     .publish(topic.clone(), json_byte_vec) {
-                //     warn!("Publish error: {e:?}");
-                // }
+        let _ = swarm
+            .behaviour_mut()
+            .gossip
+            .publish(chain_topic.clone(), node.ledger_bytes()?);
+        match node.typ {
+            NodeType::Provider | NodeType::Validator { .. } => {
+                tokio::select! {
+                    event = swarm.select_next_some() => handle_swarm_event(&mut node, &mut swarm, event).await
+                }
             }
-            event = swarm.select_next_some() => handle_swarm_event(&mut swarm, &mut client_node_data, event).await
+            NodeType::Client { ref mut stdin } => {
+                tokio::select! {
+                    Ok(Some(line)) = stdin.next_line() => {
+                        // this should be made to be user defined later
+                        // let key = RecordKey::new(&MODEL_ID_0);
+                        // swarm
+                        //     .behaviour_mut()
+                        //     .kad
+                        //     .get_providers(key.clone());
+                        // *user_input = Some(line);
+
+                        warn!("Sending message: {line}");
+                        let message =CompletionReq {model_id: MODEL_ID_0, prompt: &line};
+                        let json_byte_vec = serde_json::to_vec(&message).expect("failed serialization of message");
+                        if let Err(e) = swarm
+                            .behaviour_mut().gossip
+                            .publish(comp_topic.clone(), json_byte_vec) {
+                            warn!("Publish error: {e:?}");
+                        }
+                    }
+                    event = swarm.select_next_some() => handle_swarm_event(&mut node,&mut swarm, event).await
+                }
+            }
         }
     }
 }
