@@ -361,6 +361,9 @@ name = "bytes"
 version = "1.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9ac0150caa2ae65ca5bd83f25c7de183dea78d4d366469f148435e2acfbad0da"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "cc"
@@ -1513,6 +1516,7 @@ dependencies = [
  "libp2p-noise",
  "libp2p-ping",
  "libp2p-quic",
+ "libp2p-request-response",
  "libp2p-swarm",
  "libp2p-tcp",
  "libp2p-tls",
@@ -1569,6 +1573,7 @@ dependencies = [
  "quick-protobuf",
  "rand 0.8.5",
  "rw-stream-sink",
+ "serde",
  "smallvec",
  "thiserror",
  "tracing",
@@ -1639,6 +1644,7 @@ dependencies = [
  "quick-protobuf-codec",
  "rand 0.8.5",
  "regex",
+ "serde",
  "sha2",
  "smallvec",
  "tracing",
@@ -1681,6 +1687,7 @@ dependencies = [
  "multihash",
  "quick-protobuf",
  "rand 0.8.5",
+ "serde",
  "sha2",
  "thiserror",
  "tracing",
@@ -1707,6 +1714,7 @@ dependencies = [
  "quick-protobuf",
  "quick-protobuf-codec",
  "rand 0.8.5",
+ "serde",
  "sha2",
  "smallvec",
  "thiserror",
@@ -1822,6 +1830,28 @@ dependencies = [
  "thiserror",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "libp2p-request-response"
+version = "0.27.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1356c9e376a94a75ae830c42cdaea3d4fe1290ba409a22c809033d1b7dcab0a6"
+dependencies = [
+ "async-trait",
+ "futures",
+ "futures-bounded",
+ "futures-timer",
+ "libp2p-core",
+ "libp2p-identity",
+ "libp2p-swarm",
+ "rand 0.8.5",
+ "serde",
+ "serde_json",
+ "smallvec",
+ "tracing",
+ "void",
+ "web-time",
 ]
 
 [[package]]
@@ -2104,6 +2134,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cc41f430805af9d1cf4adae4ed2149c759b877b01d909a1f40256188d09345d2"
 dependencies = [
  "core2",
+ "serde",
  "unsigned-varint 0.8.0",
 ]
 
