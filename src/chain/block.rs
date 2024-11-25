@@ -23,8 +23,13 @@ struct BlockBuilder<'p> {
     bpm: u64,
     prev_hash: &'p str,
 }
+pub type Blockchain = Vec<Block>;
+pub fn init_chain() -> Blockchain {
+    let gen_block = LazyLock::force(&GENESIS_BLOCK).clone();
+    vec![gen_block]
+}
 
-pub const GENESIS_BLOCK: LazyLock<Block> = LazyLock::new(|| {
+const GENESIS_BLOCK: LazyLock<Block> = LazyLock::new(|| {
     BlockBuilder {
         timestamp: Utc::now(),
         idx: 0,

@@ -1927,25 +1927,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "libp2p-tutorial"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "chrono",
- "clap",
- "futures",
- "libp2p",
- "serde",
- "serde_json",
- "sha3",
- "tokio",
- "tracing",
- "tracing-bunyan-formatter",
- "tracing-log 0.2.0",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "libp2p-upnp"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2014,6 +1995,25 @@ name = "litemap"
 version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "643cb0b8d4fcc284004d5fd0d67ccf61dfffadb7f75e1e71bc420f4688a3a704"
+
+[[package]]
+name = "llm_chain"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "clap",
+ "futures",
+ "libp2p",
+ "serde",
+ "serde_json",
+ "sha3",
+ "tokio",
+ "tracing",
+ "tracing-bunyan-formatter",
+ "tracing-log 0.2.0",
+ "tracing-subscriber",
+]
 
 [[package]]
 name = "lock_api"

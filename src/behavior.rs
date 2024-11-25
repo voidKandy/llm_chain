@@ -37,7 +37,8 @@ pub enum CompResStatus {
     Finished,
 }
 
-const IDENTIFY_ID: &str = "/ipfs/id/1.0.0";
+const IDENTIFY_ID: &str = "/id/1.0.0";
+
 #[derive(NetworkBehaviour)]
 pub struct SysBehaviour {
     pub gossip: gossipsub::Behaviour,
@@ -65,7 +66,7 @@ impl CompletionReq {
 }
 
 impl SysBehaviour {
-    pub fn new(peer_id: PeerId, key: Keypair) -> Self {
+    pub fn new(key: Keypair) -> Self {
         let message_id_fn = |message: &gossipsub::Message| {
             let mut s = DefaultHasher::new();
             message.data.hash(&mut s);
@@ -74,22 +75,25 @@ impl SysBehaviour {
         let identify =
             identify::Behaviour::new(identify::Config::new(IDENTIFY_ID.to_string(), key.public()));
 
-        let peer_store = MemoryStore::new(peer_id);
         let gossip_config = gossipsub::ConfigBuilder::default()
             .message_id_fn(message_id_fn)
             .build()
             .expect("failed to build gossip config");
 
-        let gossip =
-            gossipsub::Behaviour::new(MessageAuthenticity::Signed(key), gossip_config).unwrap();
-
+        let peer_store = MemoryStore::new(key.public().to_peer_id());
         // fairly certain this protocol name is arbitrary
-        let kad_config = kad::Config::new(StreamProtocol::new("/main"));
-
+        let kad_config = kad::Config::new(StreamProtocol::new("/kadmelia/1.0.0"));
         // Good for debugging, by default this is set to 5 mins
         // kad_config.set_periodic_bootstrap_interval(Some(Duration::from_secs(10)));
 
-        let kad = kad::Behaviour::<MemoryStore>::with_config(peer_id, peer_store, kad_config);
+        let kad = kad::Behaviour::<MemoryStore>::with_config(
+            key.public().to_peer_id(),
+            peer_store,
+            kad_config,
+        );
+
+        let gossip =
+            gossipsub::Behaviour::new(MessageAuthenticity::Signed(key), gossip_config).unwrap();
 
         let req_res = request_response::json::Behaviour::<CompletionReq, CompletionRes>::new(
             [(
@@ -98,6 +102,7 @@ impl SysBehaviour {
             )],
             request_response::Config::default(),
         );
+
         SysBehaviour {
             gossip,
             kad,
