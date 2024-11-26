@@ -1,7 +1,7 @@
 use super::NodeType;
 use crate::{
     behavior::{SysBehaviour, SysBehaviourEvent},
-    chain::transaction::Transaction,
+    chain::transaction::CompletedTransaction,
     MainResult, TX_TOPIC,
 };
 use libp2p::{
@@ -13,14 +13,14 @@ use tracing::warn;
 
 #[derive(Debug)]
 pub struct ValidatorNode {
-    tx_pool: Vec<Transaction>,
+    tx_pool: Vec<CompletedTransaction>,
 }
 
 impl NodeType for ValidatorNode {
     fn init(swarm: &mut Swarm<SysBehaviour>) -> MainResult<Self> {
+        warn!("creating validator node");
         let tx_topic = gossipsub::IdentTopic::new(TX_TOPIC);
         swarm.behaviour_mut().gossip.subscribe(&tx_topic)?;
-        warn!("creating validator node");
         Ok(ValidatorNode { tx_pool: vec![] })
     }
 
@@ -38,7 +38,7 @@ impl NodeType for ValidatorNode {
                 node.typ.tx_pool.push(tx);
             }
             _ => {
-                warn!("unhandled validator event: {event:#?}");
+                // warn!("unhandled validator event: {event:#?}");
             }
         }
         Ok(())

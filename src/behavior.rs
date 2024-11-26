@@ -1,6 +1,6 @@
 use chrono::Utc;
 use libp2p::{
-    gossipsub::{self, MessageAuthenticity},
+    gossipsub::{self, MessageAuthenticity, SubscriptionError, TopicHash},
     identify,
     identity::Keypair,
     kad::{self, store::MemoryStore},
@@ -15,26 +15,16 @@ use std::{
     io::Write,
 };
 
+/// Sent by client node to providers to ask them to subscribe to their new topic
 #[derive(Debug, Hash, Deserialize, Serialize)]
-pub struct CompletionReq {
-    //shouldnt have to do this, make sure to remove
-    /// Hash from the requestor's PeerID, current timestamp, model_id and prompt
-    hash: String,
-    pub model_id: String,
-    pub prompt: String,
+pub struct SubRequest {
+    pub topic: String,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct CompletionRes {
-    // rq_hash: &'m str,
-    // this should be encrypted eventually
-    pub status: CompResStatus,
-}
-
-#[derive(Debug, Deserialize, Serialize)]
-pub enum CompResStatus {
-    Working(String),
-    Finished,
+pub struct SubResponse {
+    // if none, provider successfully subbed
+    pub subscribe_error: Option<String>,
 }
 
 const IDENTIFY_ID: &str = "/id/1.0.0";
@@ -44,27 +34,28 @@ pub struct SysBehaviour {
     pub gossip: gossipsub::Behaviour,
     pub kad: kad::Behaviour<MemoryStore>,
     pub identify: identify::Behaviour,
-    pub req_res: request_response::json::Behaviour<CompletionReq, CompletionRes>,
+    pub req_res: request_response::json::Behaviour<SubRequest, SubResponse>,
 }
 
-impl CompletionReq {
-    pub fn new<'id>(originator: &'id PeerId, prompt: &str, model_id: &str) -> Self {
-        let now = Utc::now().to_string();
-        let record = format!("{}{}{}{}", now, originator, model_id, prompt);
-        let mut hasher = Sha3_256::new();
-        let _ = hasher
-            .write(record.as_bytes())
-            .expect("failed to write to hasher buffer");
-        let hash_vec = hasher.finalize();
-        let hash = String::from_utf8_lossy(&hash_vec).to_string();
-        Self {
-            hash,
-            model_id: model_id.to_string(),
-            prompt: prompt.to_string(),
-        }
-    }
-}
+// impl CompletionReq {
+//     pub fn new<'id>(originator: &'id PeerId, prompt: &str, model_id: &str) -> Self {
+//         let now = Utc::now().to_string();
+//         let record = format!("{}{}{}{}", now, originator, model_id, prompt);
+//         let mut hasher = Sha3_256::new();
+//         let _ = hasher
+//             .write(record.as_bytes())
+//             .expect("failed to write to hasher buffer");
+//         let hash_vec = hasher.finalize();
+//         let hash = String::from_utf8_lossy(&hash_vec).to_string();
+//         Self {
+//             hash,
+//             model_id: model_id.to_string(),
+//             prompt: prompt.to_string(),
+//         }
+//     }
+// }
 
+pub const KAD_PROTOCOL: StreamProtocol = StreamProtocol::new("/kademlia/1.0.0");
 impl SysBehaviour {
     pub fn new(key: Keypair) -> Self {
         let message_id_fn = |message: &gossipsub::Message| {
@@ -82,7 +73,7 @@ impl SysBehaviour {
 
         let peer_store = MemoryStore::new(key.public().to_peer_id());
         // fairly certain this protocol name is arbitrary
-        let kad_config = kad::Config::new(StreamProtocol::new("/kadmelia/1.0.0"));
+        let kad_config = kad::Config::new(KAD_PROTOCOL);
         // Good for debugging, by default this is set to 5 mins
         // kad_config.set_periodic_bootstrap_interval(Some(Duration::from_secs(10)));
 
@@ -95,9 +86,9 @@ impl SysBehaviour {
         let gossip =
             gossipsub::Behaviour::new(MessageAuthenticity::Signed(key), gossip_config).unwrap();
 
-        let req_res = request_response::json::Behaviour::<CompletionReq, CompletionRes>::new(
+        let req_res = request_response::json::Behaviour::<SubRequest, SubResponse>::new(
             [(
-                StreamProtocol::new("/completions_protocol/1.0.0"),
+                StreamProtocol::new("/topic_sub/1.0.0"),
                 ProtocolSupport::Full,
             )],
             request_response::Config::default(),

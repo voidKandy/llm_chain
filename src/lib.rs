@@ -1,5 +1,6 @@
 mod behavior;
 pub mod chain;
+pub mod heap;
 pub mod node;
 pub mod telemetry;
 

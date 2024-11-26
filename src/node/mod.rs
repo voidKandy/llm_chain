@@ -2,14 +2,16 @@ pub mod client;
 pub mod provider;
 pub mod validator;
 use crate::{
-    behavior::{SysBehaviour, SysBehaviourEvent},
+    behavior::{SysBehaviour, SysBehaviourEvent, KAD_PROTOCOL},
     chain::block::{Block, Blockchain},
     MainResult, CHAIN_TOPIC,
 };
 use futures::StreamExt;
 use libp2p::{
     gossipsub::{self, Message, TopicHash},
+    identify,
     identity::Keypair,
+    kad,
     swarm::SwarmEvent,
     Multiaddr, PeerId, Swarm,
 };
@@ -19,7 +21,8 @@ use tracing::warn;
 pub struct Node<T> {
     swarm: Swarm<SysBehaviour>,
     typ: T,
-    pub ledger: Vec<Block>,
+    ledger: Vec<Block>,
+    should_publish_ledger: bool,
 }
 
 pub(super) trait NodeType: Sized + Debug {
@@ -50,10 +53,11 @@ pub(super) trait NodeType: Sized + Debug {
                 warn!("Listening on {address:?}");
                 // node.swarm
                 //     .add_peer_address(*node.swarm.local_peer_id(), address);
-                // node.swarm
-                //     .behaviour_mut()
-                //     .kad
-                //     .add_address(node.swarm.local_peer_id(), address);
+                let local_id = node.swarm.local_peer_id().clone();
+                node.swarm
+                    .behaviour_mut()
+                    .kad
+                    .add_address(&local_id, address);
                 // node.swarm
                 //     .behaviour_mut()
                 //     .req_res
@@ -71,6 +75,16 @@ pub(super) trait NodeType: Sized + Debug {
                     warn!("replaced node's ledger");
                 } else {
                     warn!("did not replace node's ledger");
+                }
+            }
+
+            SwarmEvent::Behaviour(SysBehaviourEvent::Identify(identify::Event::Received {
+                peer_id,
+                info,
+                ..
+            })) if info.protocols.iter().any(|p| *p == KAD_PROTOCOL) => {
+                for addr in info.listen_addrs {
+                    node.swarm.behaviour_mut().kad.add_address(&peer_id, addr);
                 }
             }
             SwarmEvent::ConnectionEstablished { peer_id, .. } => {
@@ -126,16 +140,22 @@ where
             swarm,
             typ,
             ledger: blockchain,
+            should_publish_ledger: true,
         })
     }
 
     pub async fn main_loop(&mut self) -> MainResult<()> {
+        let chain_topic = TopicHash::from_raw(CHAIN_TOPIC);
         loop {
-            // let _ = self
-            //     .swarm
-            //     .behaviour_mut()
-            //     .gossip
-            //     .publish(chain_topic.clone(), self.ledger_bytes()?);
+            if self.should_publish_ledger {
+                let ledger = self.ledger_bytes()?;
+                let _ = self
+                    .swarm
+                    .behaviour_mut()
+                    .gossip
+                    .publish(chain_topic.clone(), ledger);
+                self.should_publish_ledger = false;
+            }
             T::tokio_select_branches(self).await?
         }
     }
@@ -150,8 +170,8 @@ where
         let replace = other.len() > self.ledger.len();
         if replace {
             self.ledger = other;
+            self.should_publish_ledger = true;
         }
-
         replace
     }
 }
