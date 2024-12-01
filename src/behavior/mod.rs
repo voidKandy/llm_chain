@@ -1,31 +1,15 @@
-use chrono::Utc;
+pub mod gossip;
 use libp2p::{
-    gossipsub::{self, MessageAuthenticity, SubscriptionError, TopicHash},
+    gossipsub::{self, MessageAuthenticity},
     identify,
     identity::Keypair,
     kad::{self, store::MemoryStore},
     request_response::{self, ProtocolSupport},
     swarm::NetworkBehaviour,
-    PeerId, StreamProtocol,
+    StreamProtocol,
 };
 use serde::{Deserialize, Serialize};
-use sha3::{Digest, Sha3_256};
-use std::{
-    hash::{DefaultHasher, Hash, Hasher},
-    io::Write,
-};
-
-/// Sent by client node to providers to ask them to subscribe to their new topic
-#[derive(Debug, Hash, Deserialize, Serialize)]
-pub struct SubRequest {
-    pub topic: String,
-}
-
-#[derive(Debug, Deserialize, Serialize)]
-pub struct SubResponse {
-    // if none, provider successfully subbed
-    pub subscribe_error: Option<String>,
-}
+use std::hash::{DefaultHasher, Hash, Hasher};
 
 const IDENTIFY_ID: &str = "/id/1.0.0";
 
@@ -34,7 +18,7 @@ pub struct SysBehaviour {
     pub gossip: gossipsub::Behaviour,
     pub kad: kad::Behaviour<MemoryStore>,
     pub identify: identify::Behaviour,
-    pub req_res: request_response::json::Behaviour<SubRequest, SubResponse>,
+    // pub req_res: gossip::BidReqRes,
 }
 
 // impl CompletionReq {
@@ -86,19 +70,19 @@ impl SysBehaviour {
         let gossip =
             gossipsub::Behaviour::new(MessageAuthenticity::Signed(key), gossip_config).unwrap();
 
-        let req_res = request_response::json::Behaviour::<SubRequest, SubResponse>::new(
-            [(
-                StreamProtocol::new("/topic_sub/1.0.0"),
-                ProtocolSupport::Full,
-            )],
-            request_response::Config::default(),
-        );
+        // let req_res = request_response::json::Behaviour::<SubRequest, SubResponse>::new(
+        //     [(
+        //         StreamProtocol::new("/topic_sub/1.0.0"),
+        //         ProtocolSupport::Full,
+        //     )],
+        //     request_response::Config::default(),
+        // );
 
         SysBehaviour {
             gossip,
             kad,
             identify,
-            req_res,
+            // req_res,
         }
     }
 }

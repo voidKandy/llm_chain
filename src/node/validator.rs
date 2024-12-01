@@ -1,11 +1,11 @@
 use super::NodeType;
 use crate::{
-    behavior::{SysBehaviour, SysBehaviourEvent},
+    behavior::{gossip::SysTopic, SysBehaviour, SysBehaviourEvent},
     chain::transaction::CompletedTransaction,
-    MainResult, TX_TOPIC,
+    MainResult,
 };
 use libp2p::{
-    gossipsub::{self, Message, TopicHash},
+    gossipsub::{self, Message},
     swarm::SwarmEvent,
     Swarm,
 };
@@ -19,8 +19,10 @@ pub struct ValidatorNode {
 impl NodeType for ValidatorNode {
     fn init(swarm: &mut Swarm<SysBehaviour>) -> MainResult<Self> {
         warn!("creating validator node");
-        let tx_topic = gossipsub::IdentTopic::new(TX_TOPIC);
-        swarm.behaviour_mut().gossip.subscribe(&tx_topic)?;
+        swarm
+            .behaviour_mut()
+            .gossip
+            .subscribe(&SysTopic::Completed.subscribe())?;
         Ok(ValidatorNode { tx_pool: vec![] })
     }
 
@@ -32,9 +34,9 @@ impl NodeType for ValidatorNode {
             SwarmEvent::Behaviour(SysBehaviourEvent::Gossip(gossipsub::Event::Message {
                 message: Message { data, topic, .. },
                 ..
-            })) if topic == TopicHash::from_raw(TX_TOPIC) => {
+            })) if topic == SysTopic::Completed.publish() => {
                 warn!("validator received transaction");
-                let tx: Transaction = serde_json::from_slice(&data)?;
+                let tx: CompletedTransaction = serde_json::from_slice(&data)?;
                 node.typ.tx_pool.push(tx);
             }
             _ => {

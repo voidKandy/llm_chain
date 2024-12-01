@@ -27,7 +27,7 @@ pub struct Node<T> {
 
 pub(super) trait NodeType: Sized + Debug {
     fn init(swarm: &mut Swarm<SysBehaviour>) -> MainResult<Self>;
-    async fn tokio_select_branches(node: &mut Node<Self>) -> MainResult<()> {
+    async fn loop_logic(node: &mut Node<Self>) -> MainResult<()> {
         tokio::select! {
             event = node.swarm.select_next_some() => {
                 Self::default_handle_swarm_event(node, event).await
@@ -156,7 +156,7 @@ where
                     .publish(chain_topic.clone(), ledger);
                 self.should_publish_ledger = false;
             }
-            T::tokio_select_branches(self).await?
+            T::loop_logic(self).await?
         }
     }
 
