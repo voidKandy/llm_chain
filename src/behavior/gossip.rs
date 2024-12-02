@@ -6,6 +6,8 @@ use libp2p::{
 };
 use serde::{Deserialize, Serialize};
 use sha3::Sha3_256;
+
+use crate::heap::max::MaxHeapable;
 // pub type BidReqRes = libp2p::request_response::json::Behaviour<ProvisionBid, BidResponse>;
 
 pub enum SysTopic<'t> {
@@ -52,6 +54,14 @@ pub struct ProvisionBid {
     peer: PeerId,
     distance: u64,
     pub bid: f64,
+}
+
+impl MaxHeapable for ProvisionBid {}
+/// Should be changed later to account for many other factors
+impl PartialOrd for ProvisionBid {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.bid.partial_cmp(&other.bid)
+    }
 }
 
 #[derive(Debug, Deserialize, Serialize)]

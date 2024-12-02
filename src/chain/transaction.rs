@@ -1,17 +1,16 @@
+use crate::behavior::gossip::ProvisionBid;
 use chrono::{DateTime, Utc};
 use libp2p::PeerId;
 use serde::{Deserialize, Serialize};
 use sha3::{Digest, Sha3_256};
 use std::{io::Write, str::FromStr};
 
-use crate::behavior::gossip::ProvisionBid;
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct PendingTransaction {
     pub timestamp: String,
     pub hash: String,
     pub input: String,
     pub client: PeerId,
-    pub current_bid: Option<ProvisionBid>,
 }
 
 impl PartialOrd for PendingTransaction {
@@ -37,9 +36,9 @@ pub struct CompletedTransaction {
 }
 
 impl PendingTransaction {
-    pub fn new(client: PeerId, current_bid: f64, input: String) -> Self {
+    pub fn new(client: PeerId, input: String) -> Self {
         let timestamp = Utc::now().to_string();
-        let record = format!("{}{}{}{}", timestamp, client, current_bid, input);
+        let record = format!("{}{}{}", timestamp, client, input);
         let mut hasher = Sha3_256::new();
         let _ = hasher
             .write(record.as_bytes())
@@ -51,18 +50,23 @@ impl PendingTransaction {
             hash,
             timestamp,
             client,
-            current_bid: None,
         }
     }
 
-    pub fn complete(self, provider: PeerId, input: String, output: String) -> CompletedTransaction {
-        assert!(
-            self.current_bid.is_none(),
-            "Should never try to complete a pending without a bid"
-        );
-        let bid = self.current_bid.unwrap();
+    pub fn complete(
+        self,
+        bid: ProvisionBid,
+        provider: PeerId,
+        input: String,
+        output: String,
+    ) -> CompletedTransaction {
+        // assert!(
+        //     self.current_bid.is_none(),
+        //     "Should never try to complete a pending without a bid"
+        // );
+        // let bid = self.current_bid.unwrap();
         let timestamp = Utc::now().to_string();
-        let record = format!("{timestamp}{}{provider}{bid:?}{input}{output}", self.client,);
+        let record = format!("{timestamp}{}{provider}{bid:?}{input}{output}", self.client);
         let mut hasher = Sha3_256::new();
         let _ = hasher
             .write(record.as_bytes())

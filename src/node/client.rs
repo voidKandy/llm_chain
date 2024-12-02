@@ -1,3 +1,5 @@
+use std::time::{Duration, Instant};
+
 use super::{Node, NodeType};
 use crate::{
     behavior::{
@@ -5,6 +7,7 @@ use crate::{
         SysBehaviour, SysBehaviourEvent,
     },
     chain::transaction::PendingTransaction,
+    heap::max::MaxHeap,
     MainResult,
 };
 use futures::StreamExt;
@@ -19,23 +22,46 @@ use tracing::warn;
 
 #[derive(Debug)]
 pub struct ClientNode {
-    /// TopicHash unique to this node
     my_topic: TopicHash,
-    stdin: Lines<BufReader<Stdin>>,
-    current_tx: Option<ClientPendingTransaction>,
-    // waiting_on_response: bool,
-    // user_input: Option<String>,
-    // provider_query_id: Option<QueryId>,
+    state: ClientNodeState,
 }
 
-// BAD smelly?
+const AUCTIONING_DURATION: Duration = Duration::from_millis(250);
+
 #[derive(Debug)]
-enum ClientPendingTransaction {
-    Pending(PendingTransaction),
-    Completing {
+enum ClientNodeState {
+    Idle {
+        stdin: Lines<BufReader<Stdin>>,
+    },
+    Auctioning {
+        start: Instant,
+        bids: MaxHeap<ProvisionBid>,
+    },
+    Connecting {
+        provider: PeerId,
+    },
+    GettingCompletion {
         expected_amt_messages: Option<usize>,
         messages: Vec<(usize, String)>,
     },
+}
+
+impl ClientNodeState {
+    async fn try_idle_stdin_line(&mut self) -> tokio::io::Result<Option<String>> {
+        if let Self::Idle { stdin } = self {
+            return stdin.next_line().await;
+        }
+
+        return Ok(None);
+    }
+}
+
+impl Default for ClientNodeState {
+    fn default() -> Self {
+        Self::Idle {
+            stdin: tokio::io::BufReader::new(tokio::io::stdin()).lines(),
+        }
+    }
 }
 
 // this should be done as state, just as the provider is
@@ -65,8 +91,6 @@ pub enum CompletionMessage {
 
 impl NodeType for ClientNode {
     fn init(swarm: &mut Swarm<SysBehaviour>) -> MainResult<Self> {
-        // let tx_topic = gossipsub::IdentTopic::new(PENDING_TX_TOPIC);
-        // swarm.behaviour_mut().gossip.subscribe(&tx_topic)?;
         let my_topic = TopicHash::from_raw(swarm.local_peer_id().to_string());
         let topic = gossipsub::IdentTopic::new(my_topic.to_string());
         swarm
@@ -77,38 +101,42 @@ impl NodeType for ClientNode {
 
         Ok(ClientNode {
             my_topic,
-            // current_tx: None,
-            stdin: tokio::io::BufReader::new(tokio::io::stdin()).lines(),
-            // waiting_on_response: false,
-            current_tx: None,
-            // provider_query_id: None,
-            // user_input: None,
+            state: ClientNodeState::default(),
         })
     }
 
     async fn loop_logic(node: &mut Node<Self>) -> MainResult<()> {
-        tokio::select! {
-            event = node.swarm.select_next_some() => Self::default_handle_swarm_event(node, event).await,
-            Ok(Some(line)) = node.typ.stdin.next_line() => {
-                if node.typ.current_tx.is_none() {
-                    // node.typ.user_input = Some(line);
-
-                    // let key = RecordKey::new(&MODEL_ID_0);
-                     // node.typ.provider_query_id = Some(node.swarm
-                     //    .behaviour_mut()
-                     //    .kad
-                     //    .get_providers(key.clone()));
-
-
-                    let local_id = node.swarm.local_peer_id();
-                    let tx = PendingTransaction::new(*local_id, 2., line);
-                    let data = serde_json::to_vec(&tx).unwrap();
-                    node.swarm.behaviour_mut().gossip.publish(SysTopic::Pending.publish(), data).unwrap();
-                    node.typ.current_tx = Some(ClientPendingTransaction::Pending(tx));
+        match &mut node.typ.state {
+            ClientNodeState::Auctioning { start, bids } => {
+                if start.elapsed() >= AUCTIONING_DURATION && bids.len() > 0 {
+                    // should start connecting to provider
                 }
-                Ok(())
             }
+            ClientNodeState::GettingCompletion {
+                expected_amt_messages,
+                messages,
+            } => {}
+            ClientNodeState::Idle { .. } => {}
+            ClientNodeState::Connecting { provider } => {}
         }
+        tokio::select! {
+                event = node.swarm.select_next_some() => Self::default_handle_swarm_event(node, event).await,
+                Ok(Some(line)) = node.typ.state.try_idle_stdin_line() => {
+                        let local_id = node.swarm.local_peer_id();
+                        let tx = PendingTransaction::new(*local_id, line);
+                        let data = serde_json::to_vec(&tx).unwrap();
+                        node.swarm
+                            .behaviour_mut()
+                            .gossip
+                            .publish(SysTopic::Pending.publish(), data)
+                            .unwrap();
+                        node.typ.state = ClientNodeState::Auctioning {
+                            start: Instant::now(),
+                            bids: vec![].into(),
+                        };
+                Ok(())
+        }
+            }
     }
 
     async fn handle_swarm_event(
@@ -120,8 +148,6 @@ impl NodeType for ClientNode {
                 message: gossipsub::Message { data, topic, .. },
                 ..
             })) if topic == node.typ.my_topic => {
-                // let message  =
-                //     serde_json::from_slice(&data).unwrap();
                 let message: ClientChannelMessage = {
                     if let Ok(bid) = serde_json::from_slice::<ProvisionBid>(&data) {
                         bid.into()
@@ -160,18 +186,9 @@ impl NodeType for ClientNode {
                     }
 
                     ClientChannelMessage::Bid(bid) => {
-                        warn!("recieved bid: {bid:#?}");
-                        if let Some(ref mut pending_tx) = node.typ.current_tx.as_mut() {
-                            if let ClientPendingTransaction::Pending(tx) = pending_tx {
-                                match tx.current_bid.as_mut() {
-                                    Some(current_bid) => {
-                                        if bid.better_than(&current_bid) {
-                                            *current_bid = bid;
-                                        }
-                                    }
-                                    None => tx.current_bid = Some(bid),
-                                }
-                            }
+                        if let ClientNodeState::Auctioning { ref mut bids, .. } = node.typ.state {
+                            warn!("recieved bid: {bid:#?}");
+                            bids.insert(bid);
                         }
                     }
                 }

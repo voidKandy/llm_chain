@@ -1,16 +1,6 @@
 use std::{collections::HashMap, hash::Hash};
 
-// Heap or Priority Queue
-// Weak ordered tree
-// Min Heap: every child / grandchild is smaller
-// Max Heap: every child / grandchild is larger
-// Adjust tree on every insert/delete
-// No traversal
-#[derive(Debug)]
-pub enum HeapError {
-    LengthIsZero,
-    LookupReturnedNone,
-}
+use super::HeapError;
 
 #[derive(Debug)]
 pub struct MinHeapMap<K, T> {
@@ -19,11 +9,13 @@ pub struct MinHeapMap<K, T> {
     length: usize,
 }
 
-pub trait Heapable<K: Hash + PartialEq>: PartialEq + PartialOrd + Clone + std::fmt::Debug {
+pub trait MinMapHeapable<K: Hash + PartialEq>:
+    PartialEq + PartialOrd + Clone + std::fmt::Debug
+{
     fn lookup_key(&self) -> K;
 }
 
-impl<K: Hash + PartialEq + Eq, T: Heapable<K>> From<Vec<T>> for MinHeapMap<K, T> {
+impl<K: Hash + PartialEq + Eq, T: MinMapHeapable<K>> From<Vec<T>> for MinHeapMap<K, T> {
     fn from(value: Vec<T>) -> Self {
         let mut new = Self::new();
         for v in value {
@@ -36,7 +28,7 @@ impl<K: Hash + PartialEq + Eq, T: Heapable<K>> From<Vec<T>> for MinHeapMap<K, T>
     }
 }
 
-impl<K: Hash + PartialEq + Eq, T: Heapable<K>> MinHeapMap<K, T> {
+impl<K: Hash + PartialEq + Eq, T: MinMapHeapable<K>> MinHeapMap<K, T> {
     pub fn new() -> Self {
         Self {
             data: vec![],
@@ -186,13 +178,12 @@ mod tests {
 
     use crate::chain::transaction::PendingTransaction;
 
-    use super::{Heapable, MinHeapMap};
+    use super::{MinHeapMap, MinMapHeapable};
 
-    fn create_heap_map(ids: &[PeerId], bids: &[f64]) -> MinHeapMap<PeerId, PendingTransaction> {
-        assert!(ids.len() == bids.len());
+    fn create_heap_map(ids: &[PeerId]) -> MinHeapMap<PeerId, PendingTransaction> {
         let mut heap_vec = Vec::new();
-        for i in 0..bids.len() {
-            let tx = PendingTransaction::new(ids[i], bids[i], String::new());
+        for id in ids {
+            let tx = PendingTransaction::new(*id, String::new());
             heap_vec.push(tx);
         }
         MinHeapMap::from(heap_vec)
@@ -207,7 +198,7 @@ mod tests {
             let keys = Keypair::generate_ed25519();
             ids.push(PeerId::from(keys.public()));
         }
-        let mut heap_map = create_heap_map(&ids, &input);
+        let mut heap_map = create_heap_map(&ids);
 
         let key0 = heap_map.lookup.get(&ids[0]).unwrap().clone();
         let key1 = heap_map.lookup.get(&ids[1]).unwrap().clone();
@@ -223,26 +214,24 @@ mod tests {
 
     #[test]
     fn heap_works() {
-        let input = [0., 32., 65., 16., 19., 12., 14., 7., 8.];
-
-        // let mut ids = vec![];
+        let mut ids = vec![];
         let mut heap_map = MinHeapMap::new();
-        for i in 0..input.len() {
+        for _ in 0..5 {
             let keys = Keypair::generate_ed25519();
             let id = PeerId::from(keys.public());
-            // ids.push(id);
-            heap_map.insert(PendingTransaction::new(id, input[i]));
+            ids.push(id);
+            heap_map.insert(PendingTransaction::new(id, String::new()));
         }
 
-        assert_eq!(heap_map.pop().unwrap().current_bid, input[0]);
-        assert_eq!(heap_map.length, 8);
-        assert_eq!(heap_map.pop().unwrap().current_bid, input[1]);
+        assert_eq!(heap_map.pop().unwrap().client, ids[0]);
+        assert_eq!(heap_map.length, 4);
+        assert_eq!(heap_map.pop().unwrap().client, ids[1]);
 
         let id_to_mut = *heap_map.lookup.keys().next().unwrap();
         heap_map
-            .lookup_and_mutate(id_to_mut, |v| v.current_bid = 20.)
+            .lookup_and_mutate(id_to_mut, |v| v.client = ids[3])
             .unwrap();
 
-        assert_eq!(heap_map.lookup(id_to_mut).unwrap().current_bid, 20.,);
+        assert_eq!(heap_map.lookup(id_to_mut).unwrap().client, ids[3]);
     }
 }

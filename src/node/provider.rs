@@ -5,7 +5,7 @@ use crate::{
         SysBehaviour, SysBehaviourEvent,
     },
     chain::transaction::PendingTransaction,
-    heap::{Heapable, MinHeapMap},
+    heap::min_map::{MinHeapMap, MinMapHeapable},
     MainResult,
 };
 use futures::StreamExt;
@@ -30,7 +30,7 @@ enum ProviderNodeState {
     Providing,
 }
 
-impl Heapable<PeerId> for PendingTransaction {
+impl MinMapHeapable<PeerId> for PendingTransaction {
     fn lookup_key(&self) -> PeerId {
         self.client
     }
@@ -66,11 +66,7 @@ impl NodeType for ProviderNode {
         }
         tokio::select! {
             event = node.swarm.select_next_some() => Self::default_handle_swarm_event(node, event).await,
-        // event = Self::provider_branch(node) => {
-        // },
-
         }
-        // }
     }
 
     fn init(swarm: &mut Swarm<SysBehaviour>) -> MainResult<Self> {
