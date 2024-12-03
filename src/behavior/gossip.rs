@@ -5,10 +5,20 @@ use libp2p::{
     PeerId,
 };
 use serde::{Deserialize, Serialize};
-use sha3::Sha3_256;
 
 use crate::heap::max::MaxHeapable;
-// pub type BidReqRes = libp2p::request_response::json::Behaviour<ProvisionBid, BidResponse>;
+pub type CompReqRes = libp2p::request_response::json::Behaviour<CompConnect, CompConnectConfirm>;
+
+// should send encryption key
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
+pub struct CompConnect {
+    pub tokens: f64,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
+pub struct CompConnectConfirm {
+    pub ok: bool,
+}
 
 pub enum SysTopic<'t> {
     Pending,
@@ -51,7 +61,7 @@ impl<'t> SysTopic<'t> {
 /// Sent by provider to request that it provide to client
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
 pub struct ProvisionBid {
-    peer: PeerId,
+    pub peer: PeerId,
     distance: u64,
     pub bid: f64,
 }

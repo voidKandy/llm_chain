@@ -1,9 +1,10 @@
+use core::panic;
 use std::time::{Duration, Instant};
 
 use super::{Node, NodeType};
 use crate::{
     behavior::{
-        gossip::{ProvisionBid, SysTopic},
+        gossip::{CompConnect, ProvisionBid, SysTopic},
         SysBehaviour, SysBehaviourEvent,
     },
     chain::transaction::PendingTransaction,
@@ -13,6 +14,7 @@ use crate::{
 use futures::StreamExt;
 use libp2p::{
     gossipsub::{self, TopicHash},
+    request_response,
     swarm::SwarmEvent,
     PeerId, Swarm,
 };
@@ -38,6 +40,7 @@ enum ClientNodeState {
         bids: MaxHeap<ProvisionBid>,
     },
     Connecting {
+        bid: ProvisionBid,
         provider: PeerId,
     },
     GettingCompletion {
@@ -46,13 +49,33 @@ enum ClientNodeState {
     },
 }
 
-impl ClientNodeState {
-    async fn try_idle_stdin_line(&mut self) -> tokio::io::Result<Option<String>> {
-        if let Self::Idle { stdin } = self {
-            return stdin.next_line().await;
-        }
+enum StateEvent {
+    UserInput(String),
+    ChoseBid(ProvisionBid),
+}
 
-        return Ok(None);
+impl ClientNodeState {
+    async fn try_next_state_event(&mut self) -> anyhow::Result<Option<StateEvent>> {
+        match self {
+            Self::Idle { stdin } => {
+                if let Some(input) = stdin.next_line().await? {
+                    if !input.is_empty() {
+                        return Ok(Some(StateEvent::UserInput(input)));
+                    }
+                }
+            }
+
+            ClientNodeState::Auctioning { start, bids } => {
+                let elapsed = start.elapsed();
+                tracing::warn!("elapsed: {elapsed:#?}");
+                if elapsed >= AUCTIONING_DURATION && bids.len() > 0 {
+                    let bid = bids.pop().expect("failed to get bid from heap");
+                    return Ok(Some(StateEvent::ChoseBid(bid)));
+                }
+            }
+            _ => {}
+        }
+        Ok(None)
     }
 }
 
@@ -106,22 +129,20 @@ impl NodeType for ClientNode {
     }
 
     async fn loop_logic(node: &mut Node<Self>) -> MainResult<()> {
-        match &mut node.typ.state {
-            ClientNodeState::Auctioning { start, bids } => {
-                if start.elapsed() >= AUCTIONING_DURATION && bids.len() > 0 {
-                    // should start connecting to provider
-                }
-            }
-            ClientNodeState::GettingCompletion {
-                expected_amt_messages,
-                messages,
-            } => {}
-            ClientNodeState::Idle { .. } => {}
-            ClientNodeState::Connecting { provider } => {}
+        if let ClientNodeState::Connecting { provider, bid } = &node.typ.state {
+            node.swarm
+                .behaviour_mut()
+                .req_res
+                .send_request(&provider, CompConnect { tokens: bid.bid });
         }
         tokio::select! {
-                event = node.swarm.select_next_some() => Self::default_handle_swarm_event(node, event).await,
-                Ok(Some(line)) = node.typ.state.try_idle_stdin_line() => {
+            event = node.swarm.select_next_some() => Self::default_handle_swarm_event(node, event).await,
+            Ok(Some(event)) = node.typ.state.try_next_state_event() => {
+                match event {
+                    StateEvent::ChoseBid(bid) => {
+                        node.typ.state = ClientNodeState::Connecting {  provider: bid.peer, bid , };
+                    },
+                    StateEvent::UserInput(line) => {
                         let local_id = node.swarm.local_peer_id();
                         let tx = PendingTransaction::new(*local_id, line);
                         let data = serde_json::to_vec(&tx).unwrap();
@@ -134,9 +155,11 @@ impl NodeType for ClientNode {
                             start: Instant::now(),
                             bids: vec![].into(),
                         };
+                    }
+                }
                 Ok(())
-        }
             }
+        }
     }
 
     async fn handle_swarm_event(
@@ -187,7 +210,6 @@ impl NodeType for ClientNode {
 
                     ClientChannelMessage::Bid(bid) => {
                         if let ClientNodeState::Auctioning { ref mut bids, .. } = node.typ.state {
-                            warn!("recieved bid: {bid:#?}");
                             bids.insert(bid);
                         }
                     }
@@ -245,17 +267,26 @@ impl NodeType for ClientNode {
             //         warn!("unhandled kad event: {kad_event:#?}");
             //     }
             // },
-
-            // SwarmEvent::Behaviour(SysBehaviourEvent::ReqRes(
-            //     request_response::Event::Message {
-            //         peer,
-            //         message:
-            //             request_response::Message::Response {
-            //                 request_id,
-            //                 response,
-            //             },
-            //     },
-            // )) => match response.subscribe_error {
+            SwarmEvent::Behaviour(SysBehaviourEvent::ReqRes(
+                request_response::Event::Message {
+                    peer,
+                    message:
+                        request_response::Message::Response {
+                            request_id,
+                            response,
+                        },
+                },
+            )) => {
+                if response.ok {
+                    node.typ.state = ClientNodeState::GettingCompletion {
+                        expected_amt_messages: None,
+                        messages: vec![],
+                    };
+                } else {
+                    panic!("got not okay response from provider!!");
+                }
+            }
+            // match response.subscribe_error {
             //     None => {
             //         warn!("no error, ready to receive");
             //         assert!(node.typ.current_tx.is_none(), "current tx cannot be some");

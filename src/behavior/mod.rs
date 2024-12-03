@@ -1,4 +1,5 @@
 pub mod gossip;
+use gossip::{CompConnect, CompConnectConfirm};
 use libp2p::{
     gossipsub::{self, MessageAuthenticity},
     identify,
@@ -18,7 +19,7 @@ pub struct SysBehaviour {
     pub gossip: gossipsub::Behaviour,
     pub kad: kad::Behaviour<MemoryStore>,
     pub identify: identify::Behaviour,
-    // pub req_res: gossip::BidReqRes,
+    pub req_res: gossip::CompReqRes,
 }
 
 // impl CompletionReq {
@@ -70,19 +71,19 @@ impl SysBehaviour {
         let gossip =
             gossipsub::Behaviour::new(MessageAuthenticity::Signed(key), gossip_config).unwrap();
 
-        // let req_res = request_response::json::Behaviour::<SubRequest, SubResponse>::new(
-        //     [(
-        //         StreamProtocol::new("/topic_sub/1.0.0"),
-        //         ProtocolSupport::Full,
-        //     )],
-        //     request_response::Config::default(),
-        // );
+        let req_res = request_response::json::Behaviour::<CompConnect, CompConnectConfirm>::new(
+            [(
+                StreamProtocol::new("/compreqres/1.0.0"),
+                ProtocolSupport::Full,
+            )],
+            request_response::Config::default(),
+        );
 
         SysBehaviour {
             gossip,
             kad,
             identify,
-            // req_res,
+            req_res,
         }
     }
 }

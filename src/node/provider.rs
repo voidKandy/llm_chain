@@ -1,7 +1,9 @@
+use std::borrow::BorrowMut;
+
 use super::{Node, NodeType};
 use crate::{
     behavior::{
-        gossip::{self, SysTopic},
+        gossip::{self, CompConnectConfirm, SysTopic},
         SysBehaviour, SysBehaviourEvent,
     },
     chain::transaction::PendingTransaction,
@@ -11,6 +13,7 @@ use crate::{
 use futures::StreamExt;
 use libp2p::{
     gossipsub::{self},
+    request_response,
     swarm::SwarmEvent,
     PeerId, Swarm,
 };
@@ -95,49 +98,38 @@ impl NodeType for ProviderNode {
         event: libp2p::swarm::SwarmEvent<crate::behavior::SysBehaviourEvent>,
     ) -> MainResult<()> {
         match event {
-            // SwarmEvent::Behaviour(SysBehaviourEvent::ReqRes(
-            //     request_response::Event::Message {
-            //         peer,
-            //         message:
-            //             request_response::Message::Request {
-            //                 request, channel, ..
-            //             },
-            //     },
-            // )) => {
-            //     warn!("got request: {request:#?} from peer: {peer:#?}");
-            //     let topic = gossipsub::IdentTopic::new(request.topic);
-            // let subscribe_error = match node.swarm.behaviour_mut().gossip.subscribe(&topic) {
-            //     Ok(_) => None,
-            //     Err(e) => Some(e.to_string()),
-            // };
-
-            // node.swarm
-            //     .behaviour_mut()
-            //     .req_res
-            //     .send_response(
-            //         channel,
-            //         SubResponse {
-            //             subscribe_error: None,
-            //         },
-            //     )
-            //     .expect("failed to send response");
-
-            // This should eventually call a model and stream the tokens to the client
-            // for i in 0..5 {
-            //     warn!("sending message");
-            //     node.swarm
-            //         .behaviour_mut()
-            //         .gossip
-            //         .publish(
-            //             topic.clone(),
-            //             serde_json::to_vec(&CompletionMessage::Working {
-            //                 idx: i,
-            //                 token: format!("message{i}"),
-            //             })
-            //             .expect("couldn't serialize message"),
-            //         )
-            //         .expect("failed to publish");
-            // }
+            SwarmEvent::Behaviour(SysBehaviourEvent::ReqRes(
+                request_response::Event::Message {
+                    peer,
+                    message:
+                        request_response::Message::Request {
+                            request, channel, ..
+                        },
+                },
+            )) => {
+                warn!("got request: {request:#?} from peer: {peer:#?}");
+                node.swarm
+                    .behaviour_mut()
+                    .req_res
+                    .send_response(channel, CompConnectConfirm { ok: true })
+                    .expect("failed to send response");
+                // This should eventually call a model and stream the tokens to the client
+                // for i in 0..5 {
+                //     warn!("sending message");
+                //     node.swarm
+                //         .behaviour_mut()
+                //         .gossip
+                //         .publish(
+                //             topic.clone(),
+                //             serde_json::to_vec(&CompletionMessage::Working {
+                //                 idx: i,
+                //                 token: format!("message{i}"),
+                //             })
+                //             .expect("couldn't serialize message"),
+                //         )
+                //         .expect("failed to publish");
+                // }
+            }
 
             // let local_id = *node.swarm.local_peer_id();
             // node.swarm
