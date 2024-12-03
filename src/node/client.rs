@@ -69,6 +69,7 @@ impl ClientNodeState {
                 let elapsed = start.elapsed();
                 tracing::warn!("elapsed: {elapsed:#?}");
                 if elapsed >= AUCTIONING_DURATION && bids.len() > 0 {
+                    tracing::warn!("bidding");
                     let bid = bids.pop().expect("failed to get bid from heap");
                     return Ok(Some(StateEvent::ChoseBid(bid)));
                 }
@@ -140,6 +141,7 @@ impl NodeType for ClientNode {
             Ok(Some(event)) = node.typ.state.try_next_state_event() => {
                 match event {
                     StateEvent::ChoseBid(bid) => {
+                        tracing::warn!("choosing bid: {bid:#?}");
                         node.typ.state = ClientNodeState::Connecting {  provider: bid.peer, bid , };
                     },
                     StateEvent::UserInput(line) => {

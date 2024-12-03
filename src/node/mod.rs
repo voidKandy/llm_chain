@@ -25,7 +25,8 @@ pub struct Node<T> {
     should_publish_ledger: bool,
 }
 
-pub(super) trait NodeType: Sized + Debug {
+#[allow(async_fn_in_trait)]
+pub trait NodeType: Sized + Debug {
     fn init(swarm: &mut Swarm<SysBehaviour>) -> MainResult<Self>;
     async fn loop_logic(node: &mut Node<Self>) -> MainResult<()> {
         tokio::select! {
@@ -48,6 +49,7 @@ pub(super) trait NodeType: Sized + Debug {
         node: &mut Node<Self>,
         event: SwarmEvent<SysBehaviourEvent>,
     ) -> MainResult<()> {
+        tracing::warn!("in default handle swarm");
         match event {
             SwarmEvent::NewListenAddr { address, .. } => {
                 warn!("Listening on {address:?}");
