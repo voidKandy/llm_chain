@@ -1,6 +1,3 @@
-use core::panic;
-use std::time::{Duration, Instant};
-
 use super::{
     super::{Node, NodeType, Wallet},
     models::{ClientNodeState, StateEvent},
@@ -21,6 +18,7 @@ use libp2p::{
     swarm::SwarmEvent,
     Swarm,
 };
+use std::time::Instant;
 use tracing::warn;
 
 #[derive(Debug)]
