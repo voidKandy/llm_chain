@@ -28,8 +28,7 @@ pub struct ClientNode {
     state: ClientNodeState,
 }
 
-const AUCTIONING_DURATION: Duration = Duration::from_millis(250);
-
+const AUCTIONING_DURATION: Duration = Duration::from_millis(100);
 #[derive(Debug)]
 enum ClientNodeState {
     Idle {
@@ -44,14 +43,17 @@ enum ClientNodeState {
         provider: PeerId,
     },
     GettingCompletion {
+        provider: PeerId,
         expected_amt_messages: Option<usize>,
         messages: Vec<(usize, String)>,
     },
 }
 
+#[derive(Debug)]
 enum StateEvent {
     UserInput(String),
     ChoseBid(ProvisionBid),
+    GotCompletion { provider: PeerId, content: String },
 }
 
 impl ClientNodeState {
@@ -65,13 +67,31 @@ impl ClientNodeState {
                 }
             }
 
-            ClientNodeState::Auctioning { start, bids } => {
+            Self::Auctioning { start, bids } => {
                 let elapsed = start.elapsed();
                 tracing::warn!("elapsed: {elapsed:#?}");
                 if elapsed >= AUCTIONING_DURATION && bids.len() > 0 {
-                    tracing::warn!("bidding");
+                    tracing::warn!("choosing bid");
                     let bid = bids.pop().expect("failed to get bid from heap");
                     return Ok(Some(StateEvent::ChoseBid(bid)));
+                }
+            }
+
+            Self::GettingCompletion {
+                provider,
+                expected_amt_messages,
+                messages,
+            } => {
+                if let Some(exp) = expected_amt_messages {
+                    if *exp == messages.len() {
+                        let content = messages
+                            .iter()
+                            .fold(String::new(), |acc, (_, m)| format!("{acc}{m}"));
+                        return Ok(Some(StateEvent::GotCompletion {
+                            provider: *provider,
+                            content,
+                        }));
+                    }
                 }
             }
             _ => {}
@@ -139,6 +159,7 @@ impl NodeType for ClientNode {
         tokio::select! {
             event = node.swarm.select_next_some() => Self::default_handle_swarm_event(node, event).await,
             Ok(Some(event)) = node.typ.state.try_next_state_event() => {
+                warn!("handling client state event: {event:#?}");
                 match event {
                     StateEvent::ChoseBid(bid) => {
                         tracing::warn!("choosing bid: {bid:#?}");
@@ -147,6 +168,7 @@ impl NodeType for ClientNode {
                     StateEvent::UserInput(line) => {
                         let local_id = node.swarm.local_peer_id();
                         let tx = PendingTransaction::new(*local_id, line);
+                        tracing::warn!("client publishing: {tx:#?}");
                         let data = serde_json::to_vec(&tx).unwrap();
                         node.swarm
                             .behaviour_mut()
@@ -158,6 +180,11 @@ impl NodeType for ClientNode {
                             bids: vec![].into(),
                         };
                     }
+
+                    StateEvent::GotCompletion { provider, content } => {
+                        warn!("got completion: {content}");
+                        node.typ.state = ClientNodeState::default();
+                    },
                 }
                 Ok(())
             }
@@ -184,28 +211,31 @@ impl NodeType for ClientNode {
                         );
                     }
                 };
+
                 warn!("client received: {message:#?}");
 
                 match message {
                     ClientChannelMessage::Completion(comp) => {
-                        match comp {
-                            CompletionMessage::Finished {
-                                peer,
-                                total_messages,
-                            } => {
-                                // should publish a transaction
-                                // node.typ.provider_query_id = None;
-                                // node.typ.user_input = None;
-                                // let current_tx = node.typ.current_tx.as_mut().unwrap();
-                                // assert_eq!(
-                                //     current_tx.tx.provider, peer,
-                                //     "somehow completion was signed with wrong signature"
-                                // );
-                                // current_tx.expected_amt_messages = Some(total_messages);
-                            }
-                            CompletionMessage::Working { idx, token } => {
-                                // let current_tx = node.typ.current_tx.as_mut().expect("tx should be some");
-                                // current_tx.messages.push((idx, token));
+                        if let ClientNodeState::GettingCompletion {
+                            provider,
+                            expected_amt_messages,
+                            messages,
+                        } = &mut node.typ.state
+                        {
+                            match comp {
+                                CompletionMessage::Finished {
+                                    peer,
+                                    total_messages,
+                                } => {
+                                    assert_eq!(
+                                        *provider, peer,
+                                        "somehow completion was signed with wrong signature"
+                                    );
+                                    *expected_amt_messages = Some(total_messages);
+                                }
+                                CompletionMessage::Working { idx, token } => {
+                                    messages.push((idx, token));
+                                }
                             }
                         }
                     }
@@ -216,59 +246,8 @@ impl NodeType for ClientNode {
                         }
                     }
                 }
-
-                // if let Some(tx) = node.typ.current_tx.as_ref() {
-                //     if let Some(exp) = tx.expected_amt_messages {
-                //         if exp == tx.messages.len() {
-                //             let tx_topic = gossipsub::IdentTopic::new(PENDING_TX_TOPIC);
-                //             warn!("should publish tx: {:#?}", tx.tx);
-                //             node.swarm
-                //                 .behaviour_mut()
-                //                 .gossip
-                //                 .publish(tx_topic, serde_json::to_vec(&tx.tx).unwrap())
-                //                 .expect("failed publish");
-                //         }
-                //     }
-                // }
             }
 
-            // SwarmEvent::Behaviour(SysBehaviourEvent::Kad(kad_event)) => match kad_event {
-            //     kad::Event::OutboundQueryProgressed { id, result, .. } => {
-            //         if node.typ.provider_query_id.is_some_and(|pid| pid == id) {
-            //             match result {
-            //                 QueryResult::GetProviders(res) => match res {
-            //                     Ok(ok) => {
-            //                         warn!("get providers ok: {ok:#?}");
-            //                         match ok {
-            //                             GetProvidersOk::FoundProviders { providers, .. } => {
-            //                                 let provider = providers.into_iter().next().unwrap();
-            //                                 warn!("client is attempting to send request to server");
-            //                                 node.swarm.behaviour_mut().req_res.send_request(
-            //                                     &provider,
-            //                                     SubRequest {
-            //                                         topic: node.typ.my_topic.to_string(),
-            //                                     },
-            //                                 );
-            //                             }
-            //                             GetProvidersOk::FinishedWithNoAdditionalRecord {
-            //                                 ..
-            //                             } => {}
-            //                         }
-            //                     }
-            //                     Err(err) => {
-            //                         warn!("get providers err: {err:#?}");
-            //                     }
-            //                 },
-            //                 _ => {
-            //                     warn!("unhandled kad query result: {result:#?}");
-            //                 }
-            //             }
-            //         }
-            //     }
-            //     _ => {
-            //         warn!("unhandled kad event: {kad_event:#?}");
-            //     }
-            // },
             SwarmEvent::Behaviour(SysBehaviourEvent::ReqRes(
                 request_response::Event::Message {
                     peer,
@@ -281,6 +260,7 @@ impl NodeType for ClientNode {
             )) => {
                 if response.ok {
                     node.typ.state = ClientNodeState::GettingCompletion {
+                        provider: peer,
                         expected_amt_messages: None,
                         messages: vec![],
                     };
@@ -288,21 +268,7 @@ impl NodeType for ClientNode {
                     panic!("got not okay response from provider!!");
                 }
             }
-            // match response.subscribe_error {
-            //     None => {
-            //         warn!("no error, ready to receive");
-            //         assert!(node.typ.current_tx.is_none(), "current tx cannot be some");
-            //         // 2.0 token val should change
-            //         node.typ.current_tx = Some(ClientTransactionInfo {
-            //             tx: ::new(*node.swarm.local_peer_id(), peer, 2.0),
-            //             messages: vec![],
-            //             expected_amt_messages: None,
-            //         });
-            //     }
-            //     Some(err_str) => {
-            //         warn!("provider encountered an error when subbing: {err_str:#?}");
-            //     }
-            // },
+
             _ => {
                 warn!("unhandled client event: {event:#?}");
             }

@@ -8,6 +8,7 @@ use crate::{
     },
     chain::transaction::PendingTransaction,
     heap::min_map::{MinHeapMap, MinMapHeapable},
+    node::client::CompletionMessage,
     MainResult,
 };
 use futures::StreamExt;
@@ -114,21 +115,21 @@ impl NodeType for ProviderNode {
                     .send_response(channel, CompConnectConfirm { ok: true })
                     .expect("failed to send response");
                 // This should eventually call a model and stream the tokens to the client
-                // for i in 0..5 {
-                //     warn!("sending message");
-                //     node.swarm
-                //         .behaviour_mut()
-                //         .gossip
-                //         .publish(
-                //             topic.clone(),
-                //             serde_json::to_vec(&CompletionMessage::Working {
-                //                 idx: i,
-                //                 token: format!("message{i}"),
-                //             })
-                //             .expect("couldn't serialize message"),
-                //         )
-                //         .expect("failed to publish");
-                // }
+                for i in 0..5 {
+                    warn!("sending message");
+                    node.swarm
+                        .behaviour_mut()
+                        .gossip
+                        .publish(
+                            SysTopic::from(&peer).publish(),
+                            serde_json::to_vec(&CompletionMessage::Working {
+                                idx: i,
+                                token: format!("message{i}"),
+                            })
+                            .expect("couldn't serialize message"),
+                        )
+                        .expect("failed to publish");
+                }
             }
 
             // let local_id = *node.swarm.local_peer_id();

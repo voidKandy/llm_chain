@@ -158,7 +158,7 @@ where
                     .publish(chain_topic.clone(), ledger);
                 self.should_publish_ledger = false;
             }
-            T::loop_logic(self).await?
+            T::loop_logic(self).await?;
         }
     }
 
