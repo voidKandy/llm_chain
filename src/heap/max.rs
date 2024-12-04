@@ -37,6 +37,10 @@ impl<T: MaxHeapable> MaxHeap<T> {
         self.length += 1;
     }
 
+    pub fn peek(&self) -> Option<&T> {
+        self.data.get(0)
+    }
+
     pub fn pop(&mut self) -> Result<T, HeapError> {
         if self.length == 0 {
             return Err(HeapError::LengthIsZero);

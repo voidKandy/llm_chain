@@ -1,14 +1,17 @@
 use core::panic;
 use std::time::{Duration, Instant};
 
-use super::{Node, NodeType, Wallet};
+use super::{
+    super::{Node, NodeType, Wallet},
+    models::{ClientNodeState, StateEvent},
+};
 use crate::{
     behavior::{
         gossip::{CompConnect, ProvisionBid, SysTopic},
         SysBehaviour, SysBehaviourEvent,
     },
     chain::transaction::PendingTransaction,
-    heap::max::MaxHeap,
+    node::client::models::AUCTIONING_DURATION,
     MainResult,
 };
 use futures::StreamExt;
@@ -16,10 +19,8 @@ use libp2p::{
     gossipsub::{self, TopicHash},
     request_response,
     swarm::SwarmEvent,
-    PeerId, Swarm,
+    Swarm,
 };
-use serde::{Deserialize, Serialize};
-use tokio::io::{AsyncBufReadExt, BufReader, Lines, Stdin};
 use tracing::warn;
 
 #[derive(Debug)]
@@ -29,38 +30,10 @@ pub struct ClientNode {
     state: ClientNodeState,
 }
 
-const AUCTIONING_DURATION: Duration = Duration::from_millis(100);
-#[derive(Debug)]
-enum ClientNodeState {
-    Idle {
-        stdin: Lines<BufReader<Stdin>>,
-    },
-    Auctioning {
-        start: Instant,
-        bids: MaxHeap<ProvisionBid>,
-    },
-    Connecting {
-        bid: ProvisionBid,
-        provider: PeerId,
-    },
-    GettingCompletion {
-        provider: PeerId,
-        expected_amt_messages: Option<usize>,
-        messages: Vec<(usize, String)>,
-    },
-}
-
-#[derive(Debug)]
-enum StateEvent {
-    UserInput(String),
-    ChoseBid(ProvisionBid),
-    GotCompletion { provider: PeerId, content: String },
-}
-
-impl ClientNodeState {
+impl ClientNode {
     async fn try_next_state_event(&mut self) -> anyhow::Result<Option<StateEvent>> {
-        match self {
-            Self::Idle { stdin } => {
+        match &mut self.state {
+            ClientNodeState::Idle { stdin } => {
                 if let Some(input) = stdin.next_line().await? {
                     if !input.is_empty() {
                         return Ok(Some(StateEvent::UserInput(input)));
@@ -68,17 +41,21 @@ impl ClientNodeState {
                 }
             }
 
-            Self::Auctioning { start, bids } => {
+            ClientNodeState::Auctioning { start, bids } => {
                 let elapsed = start.elapsed();
                 tracing::warn!("elapsed: {elapsed:#?}");
                 if elapsed >= AUCTIONING_DURATION && bids.len() > 0 {
-                    tracing::warn!("choosing bid");
-                    let bid = bids.pop().expect("failed to get bid from heap");
-                    return Ok(Some(StateEvent::ChoseBid(bid)));
+                    if let Some(bid) = bids.peek() {
+                        tracing::warn!("bid: {}, balance: {}", self.wallet.balance, bid.bid);
+                        if self.wallet.balance > bid.bid {
+                            let bid = bids.pop().expect("failed to get bid from heap");
+                            return Ok(Some(StateEvent::ChoseBid(bid)));
+                        }
+                    }
                 }
             }
 
-            Self::GettingCompletion {
+            ClientNodeState::GettingCompletion {
                 provider,
                 expected_amt_messages,
                 messages,
@@ -99,39 +76,6 @@ impl ClientNodeState {
         }
         Ok(None)
     }
-}
-
-impl Default for ClientNodeState {
-    fn default() -> Self {
-        Self::Idle {
-            stdin: tokio::io::BufReader::new(tokio::io::stdin()).lines(),
-        }
-    }
-}
-
-// this should be done as state, just as the provider is
-#[derive(Debug, Deserialize, Serialize)]
-enum ClientChannelMessage {
-    Completion(CompletionMessage),
-    Bid(ProvisionBid),
-}
-
-impl Into<ClientChannelMessage> for CompletionMessage {
-    fn into(self) -> ClientChannelMessage {
-        ClientChannelMessage::Completion(self)
-    }
-}
-
-impl Into<ClientChannelMessage> for ProvisionBid {
-    fn into(self) -> ClientChannelMessage {
-        ClientChannelMessage::Bid(self)
-    }
-}
-
-#[derive(Debug, Deserialize, Serialize)]
-pub enum CompletionMessage {
-    Working { idx: usize, token: String },
-    Finished { peer: PeerId, total_messages: usize },
 }
 
 impl<'w> NodeType<'w> for ClientNode {
@@ -161,13 +105,15 @@ impl<'w> NodeType<'w> for ClientNode {
                 .req_res
                 .send_request(&provider, CompConnect { tokens: bid.bid });
         }
+
         tokio::select! {
             event = node.swarm.select_next_some() => Self::default_handle_swarm_event(node, event).await,
-            Ok(Some(event)) = node.typ.state.try_next_state_event() => {
+            Ok(Some(event)) = node.typ.try_next_state_event() => {
                 warn!("handling client state event: {event:#?}");
                 match event {
                     StateEvent::ChoseBid(bid) => {
                         tracing::warn!("choosing bid: {bid:#?}");
+                        node.typ.adjust_wallet(|w| w.balance -= bid.bid);
                         node.typ.state = ClientNodeState::Connecting {  provider: bid.peer, bid , };
                     },
                     StateEvent::UserInput(line) => {
