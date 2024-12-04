@@ -1,7 +1,7 @@
 use core::panic;
 use std::time::{Duration, Instant};
 
-use super::{Node, NodeType};
+use super::{Node, NodeType, Wallet};
 use crate::{
     behavior::{
         gossip::{CompConnect, ProvisionBid, SysTopic},
@@ -25,6 +25,7 @@ use tracing::warn;
 #[derive(Debug)]
 pub struct ClientNode {
     my_topic: TopicHash,
+    wallet: Wallet,
     state: ClientNodeState,
 }
 
@@ -133,7 +134,10 @@ pub enum CompletionMessage {
     Finished { peer: PeerId, total_messages: usize },
 }
 
-impl NodeType for ClientNode {
+impl<'w> NodeType<'w> for ClientNode {
+    fn wallet_val(&'w mut self) -> &'w mut Wallet {
+        &mut self.wallet
+    }
     fn init(swarm: &mut Swarm<SysBehaviour>) -> MainResult<Self> {
         let my_topic = TopicHash::from_raw(swarm.local_peer_id().to_string());
         let topic = gossipsub::IdentTopic::new(my_topic.to_string());
@@ -144,6 +148,7 @@ impl NodeType for ClientNode {
             .expect("client failed to subscribe to it's unique topic'");
 
         Ok(ClientNode {
+            wallet: Wallet::new(),
             my_topic,
             state: ClientNodeState::default(),
         })

@@ -1,6 +1,6 @@
 use std::borrow::BorrowMut;
 
-use super::{Node, NodeType};
+use super::{Node, NodeType, Wallet};
 use crate::{
     behavior::{
         gossip::{self, CompConnectConfirm, SysTopic},
@@ -22,6 +22,7 @@ use tracing::warn;
 
 #[derive(Debug)]
 pub struct ProviderNode {
+    wallet: Wallet,
     pending_pool: MinHeapMap<PeerId, PendingTransaction>,
     state: ProviderNodeState,
 }
@@ -40,7 +41,10 @@ impl MinMapHeapable<PeerId> for PendingTransaction {
     }
 }
 
-impl NodeType for ProviderNode {
+impl<'w> NodeType<'w> for ProviderNode {
+    fn wallet_val(&'w mut self) -> &'w mut Wallet {
+        &mut self.wallet
+    }
     async fn loop_logic(node: &mut Node<Self>) -> MainResult<()> {
         match node.typ.state {
             ProviderNodeState::Idle => match node.typ.pending_pool.pop().ok() {
@@ -89,6 +93,7 @@ impl NodeType for ProviderNode {
         //     .expect("failed to make node a provider");
 
         Ok(ProviderNode {
+            wallet: Wallet::new(),
             pending_pool: vec![].into(),
             state: ProviderNodeState::default(),
         })

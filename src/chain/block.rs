@@ -40,6 +40,7 @@ const GENESIS_BLOCK: LazyLock<Block> = LazyLock::new(|| {
 });
 
 /// If other chain is longer, replaces chain. Otherwise discards other
+/// abstract this more generally later
 fn calculate_block_hash(idx: &usize, timestamp: &str, bpm: &u64, prev_hash: &str) -> String {
     let record = format!("{}{}{}{}", idx, timestamp, bpm, prev_hash);
     let mut hasher = Sha3_256::new();

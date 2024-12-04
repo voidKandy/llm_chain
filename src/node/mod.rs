@@ -3,7 +3,10 @@ pub mod provider;
 pub mod validator;
 use crate::{
     behavior::{SysBehaviour, SysBehaviourEvent, KAD_PROTOCOL},
-    chain::block::{Block, Blockchain},
+    chain::{
+        block::{Block, Blockchain},
+        transaction::CompletedTransaction,
+    },
     MainResult, CHAIN_TOPIC,
 };
 use futures::StreamExt;
@@ -11,11 +14,15 @@ use libp2p::{
     gossipsub::{self, Message, TopicHash},
     identify,
     identity::Keypair,
-    kad,
     swarm::SwarmEvent,
     Multiaddr, PeerId, Swarm,
 };
-use std::{fmt::Debug, time::Duration};
+use sha3::{Digest, Sha3_256};
+use std::{
+    fmt::Debug,
+    io::Write,
+    time::{Duration, Instant},
+};
 use tracing::warn;
 
 pub struct Node<T> {
@@ -25,8 +32,40 @@ pub struct Node<T> {
     should_publish_ledger: bool,
 }
 
+#[derive(Debug)]
+pub struct Wallet {
+    id: String,
+    pub balance: f64,
+    // Vector of transaction Hashes
+    transactions: Vec<String>,
+}
+
+impl Wallet {
+    pub fn new() -> Self {
+        let now = Instant::now();
+        let mut hasher = Sha3_256::new();
+        let _ = hasher
+            .write(format!("{now:#?}").as_bytes())
+            .expect("failed to write to hasher buffer");
+        let hash_vec = hasher.finalize();
+        let id = String::from_utf8_lossy(&hash_vec).to_string();
+        Self {
+            id,
+            balance: 0.,
+            transactions: vec![],
+        }
+    }
+    pub fn push_tx(&mut self, tx: &CompletedTransaction) {
+        self.transactions.push(tx.hash().to_string());
+    }
+}
+
 #[allow(async_fn_in_trait)]
-pub trait NodeType: Sized + Debug {
+pub trait NodeType<'w>: Sized + Debug {
+    fn wallet_val(&'w mut self) -> &'w mut Wallet;
+    fn adjust_wallet(&'w mut self, f: impl FnOnce(&'w mut Wallet)) {
+        f(self.wallet_val())
+    }
     fn init(swarm: &mut Swarm<SysBehaviour>) -> MainResult<Self>;
     async fn loop_logic(node: &mut Node<Self>) -> MainResult<()> {
         tokio::select! {
@@ -101,9 +140,9 @@ pub trait NodeType: Sized + Debug {
     }
 }
 
-impl<T> Node<T>
+impl<'w, T> Node<T>
 where
-    T: NodeType,
+    T: NodeType<'w>,
 {
     /// Create a node and start listening
     pub fn init(dial_address: Option<Multiaddr>, blockchain: Blockchain) -> MainResult<Node<T>> {

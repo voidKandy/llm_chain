@@ -1,4 +1,4 @@
-use super::NodeType;
+use super::{NodeType, Wallet};
 use crate::{
     behavior::{gossip::SysTopic, SysBehaviour, SysBehaviourEvent},
     chain::transaction::CompletedTransaction,
@@ -13,17 +13,24 @@ use tracing::warn;
 
 #[derive(Debug)]
 pub struct ValidatorNode {
+    wallet: Wallet,
     tx_pool: Vec<CompletedTransaction>,
 }
 
-impl NodeType for ValidatorNode {
+impl<'w> NodeType<'w> for ValidatorNode {
+    fn wallet_val(&'w mut self) -> &'w mut Wallet {
+        &mut self.wallet
+    }
     fn init(swarm: &mut Swarm<SysBehaviour>) -> MainResult<Self> {
         warn!("creating validator node");
         swarm
             .behaviour_mut()
             .gossip
             .subscribe(&SysTopic::Completed.subscribe())?;
-        Ok(ValidatorNode { tx_pool: vec![] })
+        Ok(ValidatorNode {
+            wallet: Wallet::new(),
+            tx_pool: vec![],
+        })
     }
 
     async fn handle_swarm_event(

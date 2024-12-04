@@ -35,6 +35,12 @@ pub struct CompletedTransaction {
     output: String,
 }
 
+impl CompletedTransaction {
+    pub fn hash(&self) -> &str {
+        &self.hash
+    }
+}
+
 impl PendingTransaction {
     pub fn new(client: PeerId, input: String) -> Self {
         let timestamp = Utc::now().to_string();
