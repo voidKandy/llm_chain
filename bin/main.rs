@@ -1,7 +1,9 @@
 use clap::Parser;
 use libp2p::Multiaddr;
 use llm_chain::chain::block::init_chain;
-use llm_chain::node::{client::ClientNode, provider::ProviderNode, validator::ValidatorNode, Node};
+use llm_chain::node::{
+    client::node::ClientNode, provider::ProviderNode, validator::ValidatorNode, Node,
+};
 use llm_chain::telemetry::TRACING;
 use std::sync::LazyLock;
 use tracing::warn;

@@ -1,8 +1,11 @@
-use crate::{behavior::gossip::ProvisionBid, heap::max::MaxHeap};
+use crate::{behavior::gossip::ProvisionBid, heap::max::MaxHeap, node::Node, MainResult};
 use libp2p::PeerId;
 use serde::{Deserialize, Serialize};
 use std::time::{Duration, Instant};
 use tokio::io::{AsyncBufReadExt, BufReader, Lines, Stdin};
+use tracing::warn;
+
+use super::node::ClientNode;
 
 pub(super) const AUCTIONING_DURATION: Duration = Duration::from_millis(100);
 #[derive(Debug)]

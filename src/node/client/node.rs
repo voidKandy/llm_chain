@@ -8,7 +8,7 @@ use crate::{
         SysBehaviour, SysBehaviourEvent,
     },
     chain::transaction::PendingTransaction,
-    node::client::models::AUCTIONING_DURATION,
+    node::client::models::{ClientChannelMessage, CompletionMessage, AUCTIONING_DURATION},
     MainResult,
 };
 use futures::StreamExt;
@@ -29,6 +29,46 @@ pub struct ClientNode {
 }
 
 impl ClientNode {
+    #[allow(private_interfaces)]
+    pub fn handle_event(node: &mut Node<ClientNode>, event: StateEvent) -> MainResult<()> {
+        match (event, &mut node.typ.state) {
+            (StateEvent::ChoseBid(bid), ClientNodeState::Auctioning { .. }) => {
+                tracing::warn!("choosing bid: {bid:#?}");
+                node.typ.state = ClientNodeState::Connecting {
+                    provider: bid.peer,
+                    bid,
+                };
+            }
+            (StateEvent::UserInput(line), ClientNodeState::Idle { .. }) => {
+                let local_id = node.swarm.local_peer_id();
+                let tx = PendingTransaction::new(*local_id, line);
+                tracing::warn!("client publishing: {tx:#?}");
+                let data = serde_json::to_vec(&tx).unwrap();
+                node.swarm
+                    .behaviour_mut()
+                    .gossip
+                    .publish(SysTopic::Pending.publish(), data)
+                    .unwrap();
+                node.typ.state = ClientNodeState::Auctioning {
+                    start: Instant::now(),
+                    bids: vec![].into(),
+                };
+            }
+
+            (
+                StateEvent::GotCompletion { provider, content },
+                ClientNodeState::GettingCompletion { .. },
+            ) => {
+                warn!("got completion: {content}");
+                node.typ.state = ClientNodeState::default();
+            }
+
+            other => {
+                warn!("no logic to handle: {other:#?}");
+            }
+        }
+        Ok(())
+    }
     async fn try_next_state_event(&mut self) -> anyhow::Result<Option<StateEvent>> {
         match &mut self.state {
             ClientNodeState::Idle { stdin } => {
@@ -44,12 +84,14 @@ impl ClientNode {
                 tracing::warn!("elapsed: {elapsed:#?}");
                 if elapsed >= AUCTIONING_DURATION && bids.len() > 0 {
                     if let Some(bid) = bids.peek() {
-                        tracing::warn!("bid: {}, balance: {}", self.wallet.balance, bid.bid);
+                        tracing::warn!("bid: {}, balance: {}", bid.bid, self.wallet.balance,);
                         if self.wallet.balance > bid.bid {
                             let bid = bids.pop().expect("failed to get bid from heap");
                             return Ok(Some(StateEvent::ChoseBid(bid)));
                         }
                     }
+                } else {
+                    warn!("still auctioning");
                 }
             }
 
@@ -106,34 +148,10 @@ impl<'w> NodeType<'w> for ClientNode {
 
         tokio::select! {
             event = node.swarm.select_next_some() => Self::default_handle_swarm_event(node, event).await,
-            Ok(Some(event)) = node.typ.try_next_state_event() => {
-                warn!("handling client state event: {event:#?}");
-                match event {
-                    StateEvent::ChoseBid(bid) => {
-                        tracing::warn!("choosing bid: {bid:#?}");
-                        node.typ.adjust_wallet(|w| w.balance -= bid.bid);
-                        node.typ.state = ClientNodeState::Connecting {  provider: bid.peer, bid , };
-                    },
-                    StateEvent::UserInput(line) => {
-                        let local_id = node.swarm.local_peer_id();
-                        let tx = PendingTransaction::new(*local_id, line);
-                        tracing::warn!("client publishing: {tx:#?}");
-                        let data = serde_json::to_vec(&tx).unwrap();
-                        node.swarm
-                            .behaviour_mut()
-                            .gossip
-                            .publish(SysTopic::Pending.publish(), data)
-                            .unwrap();
-                        node.typ.state = ClientNodeState::Auctioning {
-                            start: Instant::now(),
-                            bids: vec![].into(),
-                        };
-                    }
-
-                    StateEvent::GotCompletion { provider, content } => {
-                        warn!("got completion: {content}");
-                        node.typ.state = ClientNodeState::default();
-                    },
+            Ok(event_opt) = node.typ.try_next_state_event() => {
+                if let Some(event) = event_opt {
+                    warn!("handling client state event: {event:#?}");
+                    Self::handle_event(node, event)?;
                 }
                 Ok(())
             }
@@ -207,14 +225,31 @@ impl<'w> NodeType<'w> for ClientNode {
                         },
                 },
             )) => {
-                if response.ok {
-                    node.typ.state = ClientNodeState::GettingCompletion {
-                        provider: peer,
-                        expected_amt_messages: None,
-                        messages: vec![],
-                    };
-                } else {
-                    panic!("got not okay response from provider!!");
+                let mut bid_amt = None;
+                if let ClientNodeState::Connecting { bid, .. } = &node.typ.state {
+                    if response.ok {
+                        bid_amt = Some(bid.bid)
+                    }
+                }
+
+                match bid_amt {
+                    Some(amt) => {
+                        node.typ.adjust_wallet(|w| w.balance -= amt);
+                        warn!(
+                            "got bid amt: {amt}\nwallet adjusted: {:#?}",
+                            node.typ.wallet_val()
+                        );
+                        node.typ.state = ClientNodeState::GettingCompletion {
+                            provider: peer,
+                            expected_amt_messages: None,
+                            messages: vec![],
+                        };
+                    }
+                    None => {
+                        // BAD! Should restart auction
+                        warn!("did not receive an OK from provider, going back to idle");
+                        node.typ.state = ClientNodeState::default();
+                    }
                 }
             }
 

@@ -8,7 +8,7 @@ use crate::{
     },
     chain::transaction::PendingTransaction,
     heap::min_map::{MinHeapMap, MinMapHeapable},
-    node::client::CompletionMessage,
+    node::client::models::CompletionMessage,
     MainResult,
 };
 use futures::StreamExt;
@@ -32,7 +32,10 @@ enum ProviderNodeState {
     #[default]
     Idle,
     Bidding(PendingTransaction),
-    Providing,
+    Providing {
+        // should eventually include info about model
+        peer: PeerId,
+    },
 }
 
 impl MinMapHeapable<PeerId> for PendingTransaction {
@@ -70,7 +73,38 @@ impl<'w> NodeType<'w> for ProviderNode {
                     )
                     .expect("failed to publish bid");
             }
-            ProviderNodeState::Providing => {}
+            ProviderNodeState::Providing { peer } => {
+                // This should eventually call a model and stream the tokens to the client
+                let topic = SysTopic::from(&peer).publish();
+                for i in 0..5 {
+                    warn!("sending message");
+                    node.swarm
+                        .behaviour_mut()
+                        .gossip
+                        .publish(
+                            topic.clone(),
+                            serde_json::to_vec(&CompletionMessage::Working {
+                                idx: i,
+                                token: format!("message{i}"),
+                            })
+                            .expect("couldn't serialize message"),
+                        )
+                        .expect("failed to publish");
+                }
+                let local_id = *node.swarm.local_peer_id();
+                node.swarm
+                    .behaviour_mut()
+                    .gossip
+                    .publish(
+                        topic,
+                        serde_json::to_vec(&CompletionMessage::Finished {
+                            peer: local_id,
+                            total_messages: 5,
+                        })
+                        .expect("couldn't serialize message"),
+                    )
+                    .expect("failed to publish");
+            }
         }
         tokio::select! {
             event = node.swarm.select_next_some() => Self::default_handle_swarm_event(node, event).await,
@@ -119,44 +153,9 @@ impl<'w> NodeType<'w> for ProviderNode {
                     .req_res
                     .send_response(channel, CompConnectConfirm { ok: true })
                     .expect("failed to send response");
-                // This should eventually call a model and stream the tokens to the client
-                for i in 0..5 {
-                    warn!("sending message");
-                    node.swarm
-                        .behaviour_mut()
-                        .gossip
-                        .publish(
-                            SysTopic::from(&peer).publish(),
-                            serde_json::to_vec(&CompletionMessage::Working {
-                                idx: i,
-                                token: format!("message{i}"),
-                            })
-                            .expect("couldn't serialize message"),
-                        )
-                        .expect("failed to publish");
-                }
+                node.typ.state = ProviderNodeState::Providing { peer };
             }
 
-            // let local_id = *node.swarm.local_peer_id();
-            // node.swarm
-            //     .behaviour_mut()
-            //     .gossip
-            //     .publish(
-            //         topic.clone(),
-            //         serde_json::to_vec(&CompletionMessage::Finished {
-            //             peer: local_id,
-            //             total_messages: 5,
-            //         })
-            //         .expect("couldn't serialize message"),
-            //     )
-            //     .expect("failed to publish");
-
-            // node.swarm
-            //     .behaviour_mut()
-            //     .gossip
-            //     .unsubscribe(&topic)
-            //     .expect("failed to unsub");
-            // }
             SwarmEvent::Behaviour(SysBehaviourEvent::Gossip(gossipsub::Event::Message {
                 message: gossipsub::Message { data, topic, .. },
                 ..

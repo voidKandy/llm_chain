@@ -9,7 +9,6 @@ use libp2p::{
     swarm::NetworkBehaviour,
     StreamProtocol,
 };
-use serde::{Deserialize, Serialize};
 use std::hash::{DefaultHasher, Hash, Hasher};
 
 const IDENTIFY_ID: &str = "/id/1.0.0";

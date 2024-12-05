@@ -51,7 +51,8 @@ impl Wallet {
         let id = String::from_utf8_lossy(&hash_vec).to_string();
         Self {
             id,
-            balance: 0.,
+            // BAD! Change this in prod to 0
+            balance: 500.,
             transactions: vec![],
         }
     }
