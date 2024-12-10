@@ -1,4 +1,4 @@
-use std::borrow::BorrowMut;
+use std::time::{Duration, Instant};
 
 use super::{Node, NodeType, Wallet};
 use crate::{
@@ -27,11 +27,16 @@ pub struct ProviderNode {
     state: ProviderNodeState,
 }
 
+pub(super) const AWAITING_RESPONSE_DURATION: Duration = Duration::from_millis(200);
 #[derive(Debug, Default)]
 enum ProviderNodeState {
     #[default]
     Idle,
     Bidding(PendingTransaction),
+    AwaitingBidResponse {
+        peer: PeerId,
+        started_wating: Instant,
+    },
     Providing {
         // should eventually include info about model
         peer: PeerId,
@@ -72,6 +77,10 @@ impl<'w> NodeType<'w> for ProviderNode {
                         serde_json::to_vec(&bid).expect("failed to serialize bid"),
                     )
                     .expect("failed to publish bid");
+                node.typ.state = ProviderNodeState::AwaitingBidResponse {
+                    peer: tx.client,
+                    started_wating: Instant::now(),
+                };
             }
             ProviderNodeState::Providing { peer } => {
                 // This should eventually call a model and stream the tokens to the client
@@ -104,6 +113,14 @@ impl<'w> NodeType<'w> for ProviderNode {
                         .expect("couldn't serialize message"),
                     )
                     .expect("failed to publish");
+                node.typ.state = ProviderNodeState::default();
+            }
+            ProviderNodeState::AwaitingBidResponse { started_wating, .. } => {
+                let elapsed = started_wating.elapsed();
+                if elapsed >= AWAITING_RESPONSE_DURATION {
+                    warn!("provider waited for response for too long, idling");
+                    node.typ.state = ProviderNodeState::default();
+                }
             }
         }
         tokio::select! {
@@ -137,35 +154,68 @@ impl<'w> NodeType<'w> for ProviderNode {
         node: &mut super::Node<Self>,
         event: libp2p::swarm::SwarmEvent<crate::behavior::SysBehaviourEvent>,
     ) -> MainResult<()> {
-        match event {
-            SwarmEvent::Behaviour(SysBehaviourEvent::ReqRes(
-                request_response::Event::Message {
-                    peer,
-                    message:
-                        request_response::Message::Request {
-                            request, channel, ..
-                        },
+        match (event, &mut node.typ.state) {
+            (
+                SwarmEvent::Behaviour(SysBehaviourEvent::ReqRes(
+                    request_response::Event::Message {
+                        peer,
+                        message:
+                            request_response::Message::Request {
+                                request, channel, ..
+                            },
+                    },
+                )),
+                ProviderNodeState::AwaitingBidResponse {
+                    peer: expected_peer,
+                    ..
                 },
-            )) => {
+            ) => {
                 warn!("got request: {request:#?} from peer: {peer:#?}");
+                if peer != *expected_peer {
+                    warn!("got response from unexpected peer, idling");
+                    node.typ.state = ProviderNodeState::default();
+                }
                 node.swarm
                     .behaviour_mut()
                     .req_res
                     .send_response(channel, CompConnectConfirm { ok: true })
                     .expect("failed to send response");
+                // set state to providing on response sent event
+                // node.typ.state = ProviderNodeState::Providing { peer };
+            }
+
+            (
+                SwarmEvent::Behaviour(SysBehaviourEvent::ReqRes(
+                    request_response::Event::ResponseSent { peer, .. },
+                )),
+                ProviderNodeState::AwaitingBidResponse {
+                    peer: expected_peer,
+                    ..
+                },
+            ) => {
+                if peer != *expected_peer {
+                    warn!("got response from unexpected peer, idling");
+                    node.typ.state = ProviderNodeState::default();
+                }
                 node.typ.state = ProviderNodeState::Providing { peer };
             }
 
-            SwarmEvent::Behaviour(SysBehaviourEvent::Gossip(gossipsub::Event::Message {
-                message: gossipsub::Message { data, topic, .. },
-                ..
-            })) if topic == SysTopic::Pending.publish() => {
+            (
+                SwarmEvent::Behaviour(SysBehaviourEvent::Gossip(gossipsub::Event::Message {
+                    message: gossipsub::Message { data, topic, .. },
+                    ..
+                })),
+                _,
+            ) if topic == SysTopic::Pending.publish() => {
                 let tx: PendingTransaction = serde_json::from_slice(&data)?;
                 warn!("provider received transaction: {tx:#?}");
                 node.typ.pending_pool.insert(tx);
             }
-            _ => {
-                warn!("unhandled event by provider: {event:#?}")
+            other => {
+                warn!(
+                    "unhandled event by provider: {:#?} With State: {:#?}",
+                    other.0, other.1
+                )
             }
         }
         Ok(())

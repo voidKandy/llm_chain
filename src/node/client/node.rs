@@ -35,6 +35,7 @@ impl ClientNode {
             (StateEvent::ChoseBid(bid), ClientNodeState::Auctioning { .. }) => {
                 tracing::warn!("choosing bid: {bid:#?}");
                 node.typ.state = ClientNodeState::Connecting {
+                    sent_request: false,
                     provider: bid.peer,
                     bid,
                 };
@@ -69,6 +70,7 @@ impl ClientNode {
         }
         Ok(())
     }
+
     async fn try_next_state_event(&mut self) -> anyhow::Result<Option<StateEvent>> {
         match &mut self.state {
             ClientNodeState::Idle { stdin } => {
@@ -139,11 +141,19 @@ impl<'w> NodeType<'w> for ClientNode {
     }
 
     async fn loop_logic(node: &mut Node<Self>) -> MainResult<()> {
-        if let ClientNodeState::Connecting { provider, bid } = &node.typ.state {
-            node.swarm
-                .behaviour_mut()
-                .req_res
-                .send_request(&provider, CompConnect { tokens: bid.bid });
+        if let ClientNodeState::Connecting {
+            provider,
+            bid,
+            ref mut sent_request,
+        } = &mut node.typ.state
+        {
+            if !*sent_request {
+                node.swarm
+                    .behaviour_mut()
+                    .req_res
+                    .send_request(&provider, CompConnect { tokens: bid.bid });
+                *sent_request = true;
+            }
         }
 
         tokio::select! {
@@ -162,11 +172,14 @@ impl<'w> NodeType<'w> for ClientNode {
         node: &mut Node<Self>,
         event: SwarmEvent<SysBehaviourEvent>,
     ) -> MainResult<()> {
-        match event {
-            SwarmEvent::Behaviour(SysBehaviourEvent::Gossip(gossipsub::Event::Message {
-                message: gossipsub::Message { data, topic, .. },
-                ..
-            })) if topic == node.typ.my_topic => {
+        match (event, &mut node.typ.state) {
+            (
+                SwarmEvent::Behaviour(SysBehaviourEvent::Gossip(gossipsub::Event::Message {
+                    message: gossipsub::Message { data, topic, .. },
+                    ..
+                })),
+                node_state,
+            ) if topic == node.typ.my_topic => {
                 let message: ClientChannelMessage = {
                     if let Ok(bid) = serde_json::from_slice::<ProvisionBid>(&data) {
                         bid.into()
@@ -181,55 +194,58 @@ impl<'w> NodeType<'w> for ClientNode {
 
                 warn!("client received: {message:#?}");
 
-                match message {
-                    ClientChannelMessage::Completion(comp) => {
-                        if let ClientNodeState::GettingCompletion {
-                            provider,
-                            expected_amt_messages,
-                            messages,
-                        } = &mut node.typ.state
-                        {
-                            match comp {
-                                CompletionMessage::Finished {
-                                    peer,
-                                    total_messages,
-                                } => {
-                                    assert_eq!(
-                                        *provider, peer,
-                                        "somehow completion was signed with wrong signature"
-                                    );
-                                    *expected_amt_messages = Some(total_messages);
-                                }
-                                CompletionMessage::Working { idx, token } => {
-                                    messages.push((idx, token));
-                                }
-                            }
+                match (message, node_state) {
+                    (
+                        ClientChannelMessage::Completion(comp),
+                        ClientNodeState::GettingCompletion {
+                            ref provider,
+                            ref mut expected_amt_messages,
+                            ref mut messages,
+                        },
+                    ) => match comp {
+                        CompletionMessage::Finished {
+                            peer,
+                            total_messages,
+                        } => {
+                            assert_eq!(
+                                *provider, peer,
+                                "somehow completion was signed with wrong signature"
+                            );
+                            *expected_amt_messages = Some(total_messages);
                         }
+                        CompletionMessage::Working { idx, token } => {
+                            messages.push((idx, token));
+                        }
+                    },
+
+                    (
+                        ClientChannelMessage::Bid(bid),
+                        ClientNodeState::Auctioning { ref mut bids, .. },
+                    ) => {
+                        bids.insert(bid);
                     }
 
-                    ClientChannelMessage::Bid(bid) => {
-                        if let ClientNodeState::Auctioning { ref mut bids, .. } = node.typ.state {
-                            bids.insert(bid);
-                        }
+                    other => {
+                        warn!(
+                            "unhandled client channel message: {:#?} with state: {:#?}",
+                            other.0, other.1
+                        );
                     }
                 }
             }
 
-            SwarmEvent::Behaviour(SysBehaviourEvent::ReqRes(
-                request_response::Event::Message {
-                    peer,
-                    message:
-                        request_response::Message::Response {
-                            request_id,
-                            response,
-                        },
-                },
-            )) => {
+            (
+                SwarmEvent::Behaviour(SysBehaviourEvent::ReqRes(
+                    request_response::Event::Message {
+                        peer,
+                        message: request_response::Message::Response { response, .. },
+                    },
+                )),
+                ClientNodeState::Connecting { bid, .. },
+            ) => {
                 let mut bid_amt = None;
-                if let ClientNodeState::Connecting { bid, .. } = &node.typ.state {
-                    if response.ok {
-                        bid_amt = Some(bid.bid)
-                    }
+                if response.ok {
+                    bid_amt = Some(bid.bid)
                 }
 
                 match bid_amt {
@@ -253,8 +269,11 @@ impl<'w> NodeType<'w> for ClientNode {
                 }
             }
 
-            _ => {
-                warn!("unhandled client event: {event:#?}");
+            other => {
+                warn!(
+                    "unhandled swarm event: {:#?} for client state: {:#?}",
+                    other.0, other.1
+                );
             }
         }
         Ok(())

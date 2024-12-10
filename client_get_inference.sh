@@ -25,9 +25,7 @@ tmux send-keys -t $SESSION_NAME:$WINDOW_ID.1 'cargo run --bin main -- -s true | 
 
 sleep 1.8
 
-LISTENING_ADDR=$(tmux capture-pane -t $SESSION_NAME:$WINDOW_ID.1 -pS -1000 | 
-    grep "Listening" | tail -n 2 |
-    sed -n "s|.*127\.0\.0\.1/udp/\([0-9][0-9]*\).*|\1|p" )
+LISTENING_ADDR=$(tmux capture-pane -t $SESSION_NAME:$WINDOW_ID.1 -pS -5 | sed -n "s|.*127\.0\.0\.1/udp/\([0-9][0-9]*\).*|\1|p" )
 
 
 
@@ -41,9 +39,10 @@ echo "found port: $LISTENING_ADDR"
 tmux send-keys -t $SESSION_NAME:$WINDOW_ID.2 "cargo run --bin main -- /ip4/127.0.0.1/udp/$LISTENING_ADDR/quic-v1 | bunyan" C-m
 sleep 1.8
 
-echo "saying hello"
 tmux send-keys -t $SESSION_NAME:$WINDOW_ID.2 "hello" C-m
 
+# sleep .2
+# tmux send-keys -t $SESSION_NAME:$WINDOW_ID.2 C-c
+# tmux send-keys -t $SESSION_NAME:$WINDOW_ID.1 C-c
+
 tmux select-pane -t $SESSION_NAME:$WINDOW_ID.0
-
-

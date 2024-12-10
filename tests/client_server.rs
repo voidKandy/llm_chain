@@ -12,4 +12,5 @@ async fn main() {
     LazyLock::force(&TEST_TRACING);
     let mut provider = Node::<ProviderNode>::init(None, init_chain()).unwrap();
     // return node.main_loop().await;
+    //
 }
