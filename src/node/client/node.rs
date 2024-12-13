@@ -71,7 +71,7 @@ impl ClientNode {
         Ok(())
     }
 
-    async fn try_next_state_event(&mut self) -> anyhow::Result<Option<StateEvent>> {
+    async fn try_next_state_event(&mut self) -> MainResult<Option<StateEvent>> {
         match &mut self.state {
             ClientNodeState::Idle { stdin } => {
                 if let Some(input) = stdin.next_line().await? {

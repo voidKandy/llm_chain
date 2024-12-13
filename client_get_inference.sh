@@ -41,7 +41,7 @@ sleep 1.8
 
 tmux send-keys -t $SESSION_NAME:$WINDOW_ID.2 "hello" C-m
 
-# sleep .2
+# sleep.2
 # tmux send-keys -t $SESSION_NAME:$WINDOW_ID.2 C-c
 # tmux send-keys -t $SESSION_NAME:$WINDOW_ID.1 C-c
 

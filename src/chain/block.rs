@@ -4,6 +4,8 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sha3::{Digest, Sha3_256};
 
+use crate::MainResult;
+
 // https://mycoralhealth.medium.com/code-a-simple-p2p-blockchain-in-go-46662601f417
 // https://mycoralhealth.medium.com/code-your-own-blockchain-in-less-than-200-lines-of-go-e296282bcffc
 // https://mycoralhealth.medium.com/code-your-own-blockchain-mining-algorithm-in-go-82c6a71aba1f
@@ -77,7 +79,7 @@ impl Block {
         true
     }
 
-    fn generate_block<'p>(&'p self, bpm: u64) -> anyhow::Result<Self> {
+    fn generate_block<'p>(&'p self, bpm: u64) -> MainResult<Self> {
         let timestamp = Utc::now();
         let idx = self.idx + 1;
         let new_block = BlockBuilder {

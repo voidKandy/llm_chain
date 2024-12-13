@@ -11,7 +11,7 @@ use libp2p::{
 };
 use std::hash::{DefaultHasher, Hash, Hasher};
 
-const IDENTIFY_ID: &str = "/id/1.0.0";
+pub const IDENTIFY_ID: &str = "/id/1.0.0";
 
 #[derive(NetworkBehaviour)]
 pub struct SysBehaviour {

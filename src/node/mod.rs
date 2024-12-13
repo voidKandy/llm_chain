@@ -13,12 +13,6 @@ use crate::{
     MainResult, CHAIN_TOPIC,
 };
 use futures::StreamExt;
-use http_body_util::BodyExt;
-use hyper::{
-    body::{Body, Bytes},
-    service::{self, service_fn},
-    Request, Response,
-};
 use libp2p::{
     gossipsub::{self, Message, TopicHash},
     identify,
@@ -44,23 +38,10 @@ pub struct Node<T> {
     // stdin: Lines<BufReader<Stdin>>,
     // this should maybe be changed to be general
     // Either way this is to provide a JSON interface
-    tcp_listener: tokio::net::TcpListener,
+    // tcp_listener: tokio::net::TcpListener,
     typ: T,
     // ledger: Vec<Block>,
     // should_publish_ledger: bool,
-}
-
-#[derive(Clone)]
-pub struct TokioExecutor;
-
-impl<F> hyper::rt::Executor<F> for TokioExecutor
-where
-    F: std::future::Future + Send + 'static,
-    F::Output: Send + 'static,
-{
-    fn execute(&self, fut: F) {
-        tokio::task::spawn(fut);
-    }
 }
 
 // VERY BAD!
@@ -128,6 +109,7 @@ pub trait NodeType<'w>: Sized + Debug {
             }
         }
     }
+
     async fn handle_swarm_event(
         _node: &mut Node<Self>,
         event: SwarmEvent<SysBehaviourEvent>,
@@ -194,44 +176,6 @@ pub trait NodeType<'w>: Sized + Debug {
     }
 }
 
-async fn handle_request(
-    req: Request<hyper::body::Incoming>,
-) -> Result<Response<http_body_util::Full<hyper::body::Bytes>>, Infallible> {
-    warn!("inside handle req");
-    let headers = req.headers();
-    // default to JSON
-    let content_type = headers
-        .get("Content-Type")
-        .and_then(|h| Some(h.to_str().unwrap().to_lowercase()))
-        .unwrap_or("application/json".to_string());
-
-    match content_type.as_str() {
-        "application/json" => {
-            warn!("content type header: {content_type:#?}");
-            let stream = req.into_data_stream();
-            let bytes: Vec<u8> = stream
-                .fold(Vec::<u8>::new(), |mut acc, bytes| async {
-                    bytes.unwrap().bytes().for_each(|b| {
-                        acc.push(b.unwrap());
-                    });
-                    acc
-                })
-                .await;
-            let req: serde_json::Value =
-                serde_json::from_slice(bytes.as_slice()).expect("failed to serialize body");
-            warn!("request: {req:#?}");
-
-            Ok(Response::new(http_body_util::Full::new(
-                hyper::body::Bytes::from("Hello, Rust HTTP Server!"),
-            )))
-        }
-
-        other => Ok(Response::new(http_body_util::Full::new(
-            hyper::body::Bytes::from(format!("server does not support {other} content type")),
-        ))),
-    }
-}
-
 impl<'w, T> Node<T>
 where
     T: NodeType<'w>,
@@ -246,11 +190,6 @@ where
         let mut swarm = libp2p::SwarmBuilder::with_existing_identity(keys.clone())
             .with_tokio()
             .with_quic()
-            // .with_tcp(
-            //     libp2p::tcp::Config::default(),
-            //     libp2p::tls::Config::new,
-            //     libp2p::yamux::Config::default,
-            // )?
             .with_dns()?
             .with_behaviour(|key| SysBehaviour::new(key.clone()))?
             .with_swarm_config(|cfg| {
@@ -264,8 +203,8 @@ where
         swarm.behaviour_mut().gossip.subscribe(&chain_topic)?;
         let typ = T::init(&mut swarm)?;
 
-        let addr = SocketAddr::from(([127, 0, 0, 1], 2345));
-        let tcp_listener = tokio::net::TcpListener::bind(addr).await?;
+        // let addr = SocketAddr::from(([127, 0, 0, 1], 2345));
+        // let tcp_listener = tokio::net::TcpListener::bind(addr).await?;
 
         // let make_svc = hyper::service::service_fn(|req| async {
         //     handle_request
@@ -289,7 +228,7 @@ where
             keys,
             swarm,
             typ,
-            tcp_listener,
+            // tcp_listener,
             // ledger: blockchain,
             // should_publish_ledger: true,
         })
@@ -297,27 +236,27 @@ where
 
     pub async fn main_loop(&mut self) -> MainResult<()> {
         loop {
-            let (stream, _) = self
-                .tcp_listener
-                .accept()
-                .await
-                .expect("failed to accept incoming");
+            // let (stream, _) = self
+            //     .tcp_listener
+            //     .accept()
+            //     .await
+            //     .expect("failed to accept incoming");
 
-            let io = hyper_util::rt::TokioIo::new(stream);
+            // let io = hyper_util::rt::TokioIo::new(stream);
 
             // Spin up a new task in Tokio so we can continue to listen for new TCP connection on the
             // current task without waiting for the processing of the HTTP/2 connection we just received
             // to finish
-            tokio::task::spawn(async move {
-                // Handle the connection from the client using HTTP/2 with an executor and pass any
-                // HTTP requests received on that connection to the `hello` function
-                if let Err(err) = hyper::server::conn::http2::Builder::new(TokioExecutor)
-                    .serve_connection(io, service_fn(handle_request))
-                    .await
-                {
-                    tracing::error!("Error serving connection: {}", err);
-                }
-            });
+            // tokio::task::spawn(async move {
+            // Handle the connection from the client using HTTP/2 with an executor and pass any
+            // HTTP requests received on that connection to the `hello` function
+            // if let Err(err) = hyper::server::conn::http2::Builder::new(TokioExecutor)
+            //     .serve_connection(io, service_fn(handle_request))
+            //     .await
+            // {
+            // tracing::error!("Error serving connection: {}", err);
+            // }
+            // });
 
             // Self::handle_local_connection(stream);
         }
