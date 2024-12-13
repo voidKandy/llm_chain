@@ -28,15 +28,15 @@ async fn main() -> llm_chain::MainResult<()> {
     let dial_address = args.dial_addr.and_then(|add| add.parse::<Multiaddr>().ok());
     match args.server {
         Some(true) => {
-            let mut node = Node::<ProviderNode>::init(dial_address, init_chain())?;
+            let mut node = Node::<ProviderNode>::init(dial_address).await?;
             return node.main_loop().await;
         }
         Some(false) => {
-            let mut node = Node::<ValidatorNode>::init(dial_address, init_chain())?;
+            let mut node = Node::<ValidatorNode>::init(dial_address).await?;
             return node.main_loop().await;
         }
         None => {
-            let mut node = Node::<ClientNode>::init(dial_address, init_chain())?;
+            let mut node = Node::<ClientNode>::init(dial_address).await?;
             return node.main_loop().await;
         }
     };

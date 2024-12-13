@@ -121,9 +121,9 @@ impl ClientNode {
 }
 
 impl<'w> NodeType<'w> for ClientNode {
-    fn wallet_val(&'w mut self) -> &'w mut Wallet {
-        &mut self.wallet
-    }
+    // fn wallet_val(&'w mut self) -> &'w mut Wallet {
+    //     &mut self.wallet
+    // }
     fn init(swarm: &mut Swarm<SysBehaviour>) -> MainResult<Self> {
         let my_topic = TopicHash::from_raw(swarm.local_peer_id().to_string());
         let topic = gossipsub::IdentTopic::new(my_topic.to_string());
@@ -243,29 +243,18 @@ impl<'w> NodeType<'w> for ClientNode {
                 )),
                 ClientNodeState::Connecting { bid, .. },
             ) => {
-                let mut bid_amt = None;
                 if response.ok {
-                    bid_amt = Some(bid.bid)
-                }
-
-                match bid_amt {
-                    Some(amt) => {
-                        node.typ.adjust_wallet(|w| w.balance -= amt);
-                        warn!(
-                            "got bid amt: {amt}\nwallet adjusted: {:#?}",
-                            node.typ.wallet_val()
-                        );
-                        node.typ.state = ClientNodeState::GettingCompletion {
-                            provider: peer,
-                            expected_amt_messages: None,
-                            messages: vec![],
-                        };
-                    }
-                    None => {
-                        // BAD! Should restart auction
-                        warn!("did not receive an OK from provider, going back to idle");
-                        node.typ.state = ClientNodeState::default();
-                    }
+                    // node.typ
+                    //     .publish_wallet_adjustment(&mut node.swarm, bid.to_owned());
+                    node.typ.state = ClientNodeState::GettingCompletion {
+                        provider: peer,
+                        expected_amt_messages: None,
+                        messages: vec![],
+                    };
+                } else {
+                    // BAD! Should restart auction
+                    warn!("did not receive an OK from provider, going back to idle");
+                    node.typ.state = ClientNodeState::default();
                 }
             }
 

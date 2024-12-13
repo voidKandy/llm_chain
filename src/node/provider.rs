@@ -50,9 +50,9 @@ impl MinMapHeapable<PeerId> for PendingTransaction {
 }
 
 impl<'w> NodeType<'w> for ProviderNode {
-    fn wallet_val(&'w mut self) -> &'w mut Wallet {
-        &mut self.wallet
-    }
+    // fn wallet_val(&'w mut self) -> &'w mut Wallet {
+    //     &mut self.wallet
+    // }
     async fn loop_logic(node: &mut Node<Self>) -> MainResult<()> {
         match node.typ.state {
             ProviderNodeState::Idle => match node.typ.pending_pool.pop().ok() {

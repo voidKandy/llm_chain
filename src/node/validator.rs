@@ -18,9 +18,9 @@ pub struct ValidatorNode {
 }
 
 impl<'w> NodeType<'w> for ValidatorNode {
-    fn wallet_val(&'w mut self) -> &'w mut Wallet {
-        &mut self.wallet
-    }
+    // fn wallet_val(&'w mut self) -> &'w mut Wallet {
+    //     &mut self.wallet
+    // }
     fn init(swarm: &mut Swarm<SysBehaviour>) -> MainResult<Self> {
         warn!("creating validator node");
         swarm

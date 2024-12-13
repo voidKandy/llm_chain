@@ -26,10 +26,11 @@ impl PartialOrd for PendingTransaction {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CompletedTransaction {
-    timestamp: String,
     hash: String,
-    client: PeerId,
-    provider: PeerId,
+    // block_id: u64,
+    timestamp: String,
+    sender: PeerId,
+    receiver: PeerId,
     tokens: f64,
     input: String,
     output: String,
@@ -62,7 +63,7 @@ impl PendingTransaction {
     pub fn complete(
         self,
         bid: ProvisionBid,
-        provider: PeerId,
+        receiver: PeerId,
         input: String,
         output: String,
     ) -> CompletedTransaction {
@@ -72,7 +73,7 @@ impl PendingTransaction {
         // );
         // let bid = self.current_bid.unwrap();
         let timestamp = Utc::now().to_string();
-        let record = format!("{timestamp}{}{provider}{bid:?}{input}{output}", self.client);
+        let record = format!("{timestamp}{}{receiver}{bid:?}{input}{output}", self.client);
         let mut hasher = Sha3_256::new();
         let _ = hasher
             .write(record.as_bytes())
@@ -82,9 +83,9 @@ impl PendingTransaction {
         CompletedTransaction {
             timestamp,
             hash,
-            client: self.client,
+            sender: self.client,
             tokens: bid.bid,
-            provider,
+            receiver,
             input,
             output,
         }
