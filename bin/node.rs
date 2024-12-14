@@ -1,21 +1,10 @@
 use clap::{Parser, Subcommand};
-use futures::StreamExt;
-use libp2p::gossipsub::MessageAuthenticity;
 use libp2p::identity::Keypair;
-use libp2p::request_response::ProtocolSupport;
-use libp2p::swarm::{NetworkBehaviour, SwarmEvent};
-use libp2p::{
-    gossipsub, identify, rendezvous, request_response, Multiaddr, PeerId, StreamProtocol, Swarm,
-};
-use llm_chain::behavior::gossip::{self, CompConnect, CompConnectConfirm};
-use llm_chain::behavior::IDENTIFY_ID;
+use libp2p::{gossipsub, Multiaddr, PeerId};
+use llm_chain::node::{client::ClientNode, server::ServerNode, Node, NodeType};
 use llm_chain::telemetry::TRACING;
-use llm_chain::{MainResult, CHAIN_TOPIC};
-use std::hash::{DefaultHasher, Hash, Hasher};
-use std::marker::PhantomData;
-use std::str::FromStr;
+use llm_chain::CHAIN_TOPIC;
 use std::sync::LazyLock;
-use std::time::Duration;
 use tracing::warn;
 
 // https://github.com/libp2p/rust-libp2p/tree/master/examples/rendezvous
@@ -28,7 +17,7 @@ pub struct Args {
 }
 
 #[derive(Subcommand, Debug)]
-enum Command {
+pub enum Command {
     Boot,
     Client,
 }
@@ -50,236 +39,11 @@ async fn main() -> llm_chain::MainResult<()> {
 
         Command::Boot => {
             let mut node = create_boot_node().await?;
+            warn!("created node");
             loop {
-                let event = node.inner.next_event().await;
+                let event = node.inner.next_event().await.unwrap();
                 warn!("event: {event:#?}");
             }
-        }
-    }
-}
-
-pub struct Node<T> {
-    keys: Keypair,
-    inner: T,
-}
-
-impl<T> Node<T>
-where
-    T: NodeType,
-{
-    fn try_from_keys(keys: Keypair) -> MainResult<Self> {
-        let swarm = T::swarm(keys.clone())?;
-        let inner = T::from_swarm(swarm);
-        Ok(Self { inner, keys })
-    }
-}
-
-enum NodeEvent<B: NetworkBehaviour, E: NodeTypeEvent> {
-    Swarm(SwarmEvent<B::ToSwarm>),
-    NodeType(E),
-}
-
-impl<B: NetworkBehaviour, E: NodeTypeEvent> std::fmt::Debug for NodeEvent<B, E>
-where
-    B::ToSwarm: std::fmt::Debug,
-{
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::NodeType(e) => write!(f, "{e:?}"),
-            Self::Swarm(e) => write!(f, "{e:?}"),
-        }
-    }
-}
-
-impl<B: NetworkBehaviour, E: NodeTypeEvent> From<SwarmEvent<B::ToSwarm>> for NodeEvent<B, E> {
-    fn from(value: SwarmEvent<B::ToSwarm>) -> Self {
-        Self::Swarm(value)
-    }
-}
-
-impl<B: NetworkBehaviour, E: NodeTypeEvent> From<E> for NodeEvent<B, E> {
-    fn from(value: E) -> Self {
-        Self::NodeType(value)
-    }
-}
-
-trait NodeTypeEvent: std::fmt::Debug {}
-trait NodeType {
-    type Behaviour: NetworkBehaviour;
-    type Event: NodeTypeEvent;
-    fn behaviour(keys: &Keypair) -> Self::Behaviour;
-
-    fn swarm_mut(&mut self) -> &mut Swarm<Self::Behaviour>;
-    fn swarm(keys: Keypair) -> MainResult<Swarm<Self::Behaviour>> {
-        Ok(libp2p::SwarmBuilder::with_existing_identity(keys.clone())
-            .with_tokio()
-            .with_quic()
-            .with_dns()?
-            .with_behaviour(|key| Self::behaviour(key))?
-            .with_swarm_config(|cfg| {
-                cfg.with_idle_connection_timeout(Duration::from_secs(u64::MAX))
-            })
-            .build())
-    }
-
-    async fn next_event(&mut self) -> MainResult<Option<NodeEvent<Self::Behaviour, Self::Event>>>;
-
-    fn from_swarm(swarm: Swarm<Self::Behaviour>) -> Self
-    where
-        Self: Sized;
-}
-
-pub struct ServerNode {
-    swarm: Swarm<ServerNodeBehavior>,
-}
-
-#[derive(NetworkBehaviour)]
-struct ServerNodeBehavior {
-    pub gossip: gossipsub::Behaviour,
-    pub rendezvous: rendezvous::server::Behaviour,
-    pub identify: identify::Behaviour,
-    pub req_res: gossip::CompReqRes,
-}
-
-#[derive(Debug)]
-enum ServerNodeEvent {}
-impl NodeTypeEvent for ServerNodeEvent {}
-
-impl NodeType for ServerNode {
-    type Behaviour = ServerNodeBehavior;
-    type Event = ServerNodeEvent;
-
-    fn from_swarm(swarm: Swarm<ServerNodeBehavior>) -> Self
-    where
-        Self: Sized,
-    {
-        Self { swarm }
-    }
-
-    fn swarm_mut(&mut self) -> &mut Swarm<ServerNodeBehavior> {
-        &mut self.swarm
-    }
-
-    async fn next_event(&mut self) -> MainResult<Option<NodeEvent<Self::Behaviour, Self::Event>>> {
-        tokio::select! {
-            swarm_event = self.swarm.select_next_some() => Ok(Some(NodeEvent::from(swarm_event)))
-        }
-    }
-
-    fn behaviour(keys: &Keypair) -> ServerNodeBehavior {
-        let message_id_fn = |message: &gossipsub::Message| {
-            let mut s = DefaultHasher::new();
-            message.data.hash(&mut s);
-            gossipsub::MessageId::from(s.finish().to_string())
-        };
-        let identify = identify::Behaviour::new(identify::Config::new(
-            IDENTIFY_ID.to_string(),
-            keys.public(),
-        ));
-
-        let gossip_config = gossipsub::ConfigBuilder::default()
-            .message_id_fn(message_id_fn)
-            .build()
-            .expect("failed to build gossip config");
-
-        let gossip =
-            gossipsub::Behaviour::new(MessageAuthenticity::Signed(keys.clone()), gossip_config)
-                .unwrap();
-
-        let req_res = request_response::json::Behaviour::<CompConnect, CompConnectConfirm>::new(
-            [(
-                StreamProtocol::new("/compreqres/1.0.0"),
-                ProtocolSupport::Full,
-            )],
-            request_response::Config::default(),
-        );
-
-        ServerNodeBehavior {
-            gossip,
-            rendezvous: rendezvous::server::Behaviour::new(rendezvous::server::Config::default()),
-            identify,
-            req_res,
-        }
-    }
-}
-
-use tokio::io::{AsyncBufReadExt, BufReader, Lines, Stdin};
-pub struct ClientNode {
-    swarm: Swarm<ClientNodeBehavior>,
-    stdin: Lines<BufReader<Stdin>>,
-}
-
-#[derive(NetworkBehaviour)]
-struct ClientNodeBehavior {
-    pub gossip: gossipsub::Behaviour,
-    pub rendezvous: rendezvous::client::Behaviour,
-    pub identify: identify::Behaviour,
-    pub req_res: gossip::CompReqRes,
-}
-
-#[derive(Debug)]
-enum ClientNodeEvent {
-    UserInput(String),
-}
-impl NodeTypeEvent for ClientNodeEvent {}
-
-impl NodeType for ClientNode {
-    type Behaviour = ClientNodeBehavior;
-    type Event = ClientNodeEvent;
-    fn swarm_mut(&mut self) -> &mut Swarm<ClientNodeBehavior> {
-        &mut self.swarm
-    }
-    fn from_swarm(swarm: Swarm<ClientNodeBehavior>) -> Self
-    where
-        Self: Sized,
-    {
-        Self {
-            swarm,
-            stdin: tokio::io::BufReader::new(tokio::io::stdin()).lines(),
-        }
-    }
-
-    async fn next_event(&mut self) -> MainResult<Option<NodeEvent<Self::Behaviour, Self::Event>>> {
-        tokio::select! {
-             swarm_event = self.swarm.select_next_some() => Ok(Some(NodeEvent::from(swarm_event))),
-            Ok(Some(line)) = self.stdin.next_line() => Ok(Some(ClientNodeEvent::UserInput(line).into())),
-
-        }
-    }
-
-    fn behaviour(keys: &Keypair) -> ClientNodeBehavior {
-        let message_id_fn = |message: &gossipsub::Message| {
-            let mut s = DefaultHasher::new();
-            message.data.hash(&mut s);
-            gossipsub::MessageId::from(s.finish().to_string())
-        };
-        let identify = identify::Behaviour::new(identify::Config::new(
-            IDENTIFY_ID.to_string(),
-            keys.public(),
-        ));
-
-        let gossip_config = gossipsub::ConfigBuilder::default()
-            .message_id_fn(message_id_fn)
-            .build()
-            .expect("failed to build gossip config");
-
-        let gossip =
-            gossipsub::Behaviour::new(MessageAuthenticity::Signed(keys.clone()), gossip_config)
-                .unwrap();
-
-        let req_res = request_response::json::Behaviour::<CompConnect, CompConnectConfirm>::new(
-            [(
-                StreamProtocol::new("/compreqres/1.0.0"),
-                ProtocolSupport::Full,
-            )],
-            request_response::Config::default(),
-        );
-
-        ClientNodeBehavior {
-            gossip,
-            rendezvous: rendezvous::client::Behaviour::new(keys.clone()),
-            identify,
-            req_res,
         }
     }
 }

@@ -1,4 +1,4 @@
-use crate::behavior::gossip::ProvisionBid;
+use crate::{behavior::gossip::ProvisionBid, heap::min_map::MinMapHeapable};
 use chrono::{DateTime, Utc};
 use libp2p::PeerId;
 use serde::{Deserialize, Serialize};
@@ -11,6 +11,12 @@ pub struct PendingTransaction {
     pub hash: String,
     pub input: String,
     pub client: PeerId,
+}
+
+impl MinMapHeapable<PeerId> for PendingTransaction {
+    fn lookup_key(&self) -> PeerId {
+        self.client
+    }
 }
 
 impl PartialOrd for PendingTransaction {
