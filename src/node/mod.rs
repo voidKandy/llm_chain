@@ -62,7 +62,6 @@ pub trait NodeType {
     type Behaviour: NetworkBehaviour;
     type Event: NodeTypeEvent;
     fn behaviour(keys: &Keypair) -> Self::Behaviour;
-
     fn swarm_mut(&mut self) -> &mut Swarm<Self::Behaviour>;
     fn swarm(keys: Keypair) -> MainResult<Swarm<Self::Behaviour>> {
         Ok(libp2p::SwarmBuilder::with_existing_identity(keys.clone())
@@ -77,7 +76,7 @@ pub trait NodeType {
     }
 
     async fn next_event(&mut self) -> MainResult<Option<NodeEvent<Self::Behaviour, Self::Event>>>;
-
+    async fn handle_event(&mut self, e: NodeEvent<Self::Behaviour, Self::Event>) -> MainResult<()>;
     fn from_swarm(swarm: Swarm<Self::Behaviour>) -> Self
     where
         Self: Sized;

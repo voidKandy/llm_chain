@@ -134,16 +134,12 @@ impl<T: MaxHeapable> MaxHeap<T> {
 }
 
 mod tests {
-    use std::{collections::HashMap, sync::LazyLock};
 
     use libp2p::{identity::Keypair, PeerId};
 
-    use crate::{
-        behavior::gossip::{BidResponse, ProvisionBid},
-        chain::transaction::PendingTransaction,
-    };
+    use crate::behaviour::ProvisionBid;
 
-    use super::{MaxHeap, MaxHeapable};
+    use super::MaxHeap;
 
     fn create_heap(ids: &[PeerId], bids: &[f64]) -> MaxHeap<ProvisionBid> {
         assert!(ids.len() == bids.len());

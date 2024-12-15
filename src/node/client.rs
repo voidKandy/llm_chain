@@ -1,6 +1,5 @@
 use super::*;
-use crate::behavior::gossip::{self, CompConnect, CompConnectConfirm};
-use crate::behavior::IDENTIFY_ID;
+use crate::behaviour::{CompConnect, CompConnectConfirm, CompReqRes, IDENTIFY_ID};
 use crate::MainResult;
 use futures::StreamExt;
 use libp2p::gossipsub::MessageAuthenticity;
@@ -21,7 +20,7 @@ pub struct ClientNodeBehavior {
     pub gossip: gossipsub::Behaviour,
     pub rendezvous: rendezvous::client::Behaviour,
     pub identify: identify::Behaviour,
-    pub req_res: gossip::CompReqRes,
+    pub req_res: CompReqRes,
 }
 
 #[derive(Debug)]
@@ -36,6 +35,7 @@ impl NodeType for ClientNode {
     fn swarm_mut(&mut self) -> &mut Swarm<ClientNodeBehavior> {
         &mut self.swarm
     }
+
     fn from_swarm(swarm: Swarm<ClientNodeBehavior>) -> Self
     where
         Self: Sized,
@@ -48,10 +48,15 @@ impl NodeType for ClientNode {
 
     async fn next_event(&mut self) -> MainResult<Option<NodeEvent<Self::Behaviour, Self::Event>>> {
         tokio::select! {
-             swarm_event = self.swarm.select_next_some() => Ok(Some(NodeEvent::from(swarm_event))),
+            swarm_event = self.swarm.select_next_some() => Ok(Some(NodeEvent::from(swarm_event))),
             Ok(Some(line)) = self.stdin.next_line() => Ok(Some(ClientNodeEvent::UserInput(line).into())),
 
         }
+    }
+
+    async fn handle_event(&mut self, e: NodeEvent<Self::Behaviour, Self::Event>) -> MainResult<()> {
+        tracing::warn!("client event: {e:#?}");
+        Ok(())
     }
 
     fn behaviour(keys: &Keypair) -> ClientNodeBehavior {

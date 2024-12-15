@@ -1,4 +1,4 @@
-use crate::{behavior::gossip::ProvisionBid, heap::min_map::MinMapHeapable};
+use crate::{behaviour::ProvisionBid, heap::min_map::MinMapHeapable};
 use chrono::{DateTime, Utc};
 use libp2p::PeerId;
 use serde::{Deserialize, Serialize};

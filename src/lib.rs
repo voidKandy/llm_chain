@@ -1,7 +1,8 @@
-pub mod behavior;
+pub mod behaviour;
 pub mod chain;
 pub mod heap;
 pub mod node;
+pub mod runtime;
 pub mod telemetry;
 
 // these should be mapped to real models down the line

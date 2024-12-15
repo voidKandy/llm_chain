@@ -1,6 +1,5 @@
 use super::*;
-use crate::behavior::gossip::{self, CompConnect, CompConnectConfirm};
-use crate::behavior::IDENTIFY_ID;
+use crate::behaviour::{CompConnect, CompConnectConfirm, CompReqRes, IDENTIFY_ID};
 use crate::MainResult;
 use futures::StreamExt;
 use libp2p::gossipsub::MessageAuthenticity;
@@ -19,7 +18,7 @@ pub struct ServerNodeBehavior {
     pub gossip: gossipsub::Behaviour,
     pub rendezvous: rendezvous::server::Behaviour,
     pub identify: identify::Behaviour,
-    pub req_res: gossip::CompReqRes,
+    pub req_res: CompReqRes,
 }
 
 #[derive(Debug)]
@@ -47,6 +46,11 @@ impl NodeType for ServerNode {
                 Ok(Some(NodeEvent::from(swarm_event)))
             }
         }
+    }
+
+    async fn handle_event(&mut self, e: NodeEvent<Self::Behaviour, Self::Event>) -> MainResult<()> {
+        tracing::warn!("server event: {e:#?}");
+        Ok(())
     }
 
     fn behaviour(keys: &Keypair) -> ServerNodeBehavior {

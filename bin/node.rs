@@ -32,8 +32,9 @@ async fn main() -> llm_chain::MainResult<()> {
         Command::Client => {
             let mut node = create_client_node_and_bootstrap().await?;
             loop {
-                let event = node.inner.next_event().await;
-                warn!("event: {event:#?}");
+                if let Ok(Some(event)) = node.inner.next_event().await {
+                    node.inner.handle_event(event).await.unwrap();
+                }
             }
         }
 
@@ -41,8 +42,9 @@ async fn main() -> llm_chain::MainResult<()> {
             let mut node = create_boot_node().await?;
             warn!("created node");
             loop {
-                let event = node.inner.next_event().await.unwrap();
-                warn!("event: {event:#?}");
+                if let Ok(Some(event)) = node.inner.next_event().await {
+                    node.inner.handle_event(event).await.unwrap();
+                }
             }
         }
     }
@@ -53,7 +55,8 @@ async fn main() -> llm_chain::MainResult<()> {
 /// head -c 32 /dev/urandom > boot.key
 /// ```
 const BOOT_NODE_PEER_ID: &str = "12D3KooWCwDGQ5jED2DCkdjLpfitvBr6KMDW3VkFLMxE4f67vUen";
-const BOOT_NODE_ADDR: &str = "/ip4/127.0.0.1/udp/62649/quic-v1";
+const BOOT_NODE_LOCAL_ADDR: &str = "/ip4/127.0.0.1/udp/62649/quic-v1";
+const BOOT_NODE_LISTEN_ADDR: &str = "/ip4/0.0.0.0/udp/62649/quic-v1";
 async fn create_boot_node() -> llm_chain::MainResult<Node<ServerNode>> {
     let mut bytes = std::fs::read("boot.key").unwrap();
     let keypair = Keypair::ed25519_from_bytes(&mut bytes)?;
@@ -73,7 +76,7 @@ async fn create_boot_node() -> llm_chain::MainResult<Node<ServerNode>> {
     server_node
         .inner
         .swarm_mut()
-        .listen_on(BOOT_NODE_ADDR.parse()?)?;
+        .listen_on(BOOT_NODE_LISTEN_ADDR.parse()?)?;
 
     Ok(server_node)
 }
@@ -92,7 +95,7 @@ async fn create_client_node_and_bootstrap() -> llm_chain::MainResult<Node<Client
         .gossip
         .subscribe(&chain_topic)?;
 
-    let rendezvous_point_address = BOOT_NODE_ADDR.parse::<Multiaddr>().unwrap();
+    let rendezvous_point_address = BOOT_NODE_LOCAL_ADDR.parse::<Multiaddr>().unwrap();
     let external_address = "/ip4/0.0.0.0/udp/0/quic-v1".parse::<Multiaddr>().unwrap();
 
     client_node
