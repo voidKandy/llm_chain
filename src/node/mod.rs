@@ -33,12 +33,28 @@ where
             tokio::select! {
                 swarm_event = self.swarm.select_next_some() => {
                     tracing::warn!("swarm event: {swarm_event:#?}");
+                if let Some(event) = self.inner.handle_swarm_event(swarm_event).await? {
+                    self.handle_swarm_event(event).await?
+                }
+
                 }
                 Ok(Some(inner_event)) = self.inner.next_event() => {
                     tracing::warn!("inner event: {inner_event:#?}");
+                    self.inner.handle_self_event(inner_event).await?;
                 }
             }
         }
+    }
+
+    /// This is where default swarm event handling should be implemented
+    async fn handle_swarm_event(
+        &mut self,
+        event: SwarmEvent<<T::Behaviour as NetworkBehaviour>::ToSwarm>,
+    ) -> MainResult<()> {
+        match event {
+            _ => {}
+        }
+        Ok(())
     }
 
     fn swarm(keys: Keypair) -> MainResult<Swarm<T::Behaviour>> {
@@ -66,7 +82,14 @@ pub trait NodeType {
 
     async fn next_event(&mut self) -> MainResult<Option<Self::Event>>;
     async fn handle_self_event(&mut self, e: Self::Event) -> MainResult<()>;
-    async fn handle_swarm_event(&mut self, _e: SwarmEvent<NodeBehaviourEvent>) -> MainResult<()> {
-        Ok(())
+
+    /// Allows individual nodes to override default event handling. Either consumes the event or
+    /// returns it to be handled by the outer Node<T>'s default handling, which is a method by the
+    /// same name
+    async fn handle_swarm_event(
+        &mut self,
+        _e: SwarmEvent<<Self::Behaviour as NetworkBehaviour>::ToSwarm>,
+    ) -> MainResult<Option<SwarmEvent<<Self::Behaviour as NetworkBehaviour>::ToSwarm>>> {
+        Ok(Some(_e))
     }
 }
