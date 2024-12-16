@@ -1,57 +1,56 @@
+pub mod behaviour;
 pub mod client;
-pub mod server;
+pub mod provider;
+pub mod validator;
 use crate::MainResult;
+use behaviour::{NodeBehaviourEvent, NodeNetworkBehaviour};
+use futures::StreamExt;
 use libp2p::{
     identity::Keypair,
     swarm::{NetworkBehaviour, Swarm, SwarmEvent},
 };
 use std::time::Duration;
 
-pub struct Node<T> {
+pub struct Node<T: NodeType> {
     keys: Keypair,
+    pub swarm: Swarm<T::Behaviour>,
     pub inner: T,
 }
 
 impl<T> Node<T>
 where
     T: NodeType,
+    <<T as NodeType>::Behaviour as NetworkBehaviour>::ToSwarm: std::fmt::Debug,
 {
     pub fn try_from_keys(keys: Keypair) -> MainResult<Self> {
-        let swarm = T::swarm(keys.clone())?;
-        let inner = T::from_swarm(swarm);
-        Ok(Self { inner, keys })
+        let swarm = Self::swarm(keys.clone())?;
+        let inner = T::new();
+        Ok(Self { inner, swarm, keys })
     }
-}
 
-pub enum NodeEvent<B: NetworkBehaviour, E: NodeTypeEvent> {
-    Swarm(SwarmEvent<B::ToSwarm>),
-    NodeType(E),
-}
-
-impl<B, E> std::fmt::Debug for NodeEvent<B, E>
-where
-    B: NetworkBehaviour,
-    E: NodeTypeEvent,
-    B::ToSwarm: std::fmt::Debug,
-{
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // keep these separate to avoid recursion
-        match self {
-            Self::Swarm(e) => write!(f, "{e:?}"),
-            Self::NodeType(e) => write!(f, "{e:?}"),
+    pub async fn main_loop(&mut self) -> MainResult<()> {
+        loop {
+            tokio::select! {
+                swarm_event = self.swarm.select_next_some() => {
+                    tracing::warn!("swarm event: {swarm_event:#?}");
+                }
+                Ok(Some(inner_event)) = self.inner.next_event() => {
+                    tracing::warn!("inner event: {inner_event:#?}");
+                }
+            }
         }
     }
-}
 
-impl<B: NetworkBehaviour, E: NodeTypeEvent> From<SwarmEvent<B::ToSwarm>> for NodeEvent<B, E> {
-    fn from(value: SwarmEvent<B::ToSwarm>) -> Self {
-        Self::Swarm(value)
-    }
-}
-
-impl<B: NetworkBehaviour, E: NodeTypeEvent> From<E> for NodeEvent<B, E> {
-    fn from(value: E) -> Self {
-        Self::NodeType(value)
+    fn swarm(keys: Keypair) -> MainResult<Swarm<T::Behaviour>> {
+        Ok(libp2p::SwarmBuilder::with_existing_identity(keys)
+            .with_tokio()
+            .with_quic()
+            .with_dns()?
+            .with_behaviour(|key| T::Behaviour::new(key.clone()))?
+            .with_swarm_config(|cfg| {
+                cfg.with_idle_connection_timeout(Duration::from_secs(u64::MAX))
+            })
+            .build())
     }
 }
 
@@ -59,25 +58,15 @@ pub trait NodeTypeEvent: std::fmt::Debug {}
 
 #[allow(async_fn_in_trait, private_bounds)]
 pub trait NodeType {
-    type Behaviour: NetworkBehaviour;
+    type Behaviour: NodeNetworkBehaviour;
     type Event: NodeTypeEvent;
-    fn behaviour(keys: &Keypair) -> Self::Behaviour;
-    fn swarm_mut(&mut self) -> &mut Swarm<Self::Behaviour>;
-    fn swarm(keys: Keypair) -> MainResult<Swarm<Self::Behaviour>> {
-        Ok(libp2p::SwarmBuilder::with_existing_identity(keys.clone())
-            .with_tokio()
-            .with_quic()
-            .with_dns()?
-            .with_behaviour(|key| Self::behaviour(key))?
-            .with_swarm_config(|cfg| {
-                cfg.with_idle_connection_timeout(Duration::from_secs(u64::MAX))
-            })
-            .build())
-    }
-
-    async fn next_event(&mut self) -> MainResult<Option<NodeEvent<Self::Behaviour, Self::Event>>>;
-    async fn handle_event(&mut self, e: NodeEvent<Self::Behaviour, Self::Event>) -> MainResult<()>;
-    fn from_swarm(swarm: Swarm<Self::Behaviour>) -> Self
+    fn new() -> Self
     where
         Self: Sized;
+
+    async fn next_event(&mut self) -> MainResult<Option<Self::Event>>;
+    async fn handle_self_event(&mut self, e: Self::Event) -> MainResult<()>;
+    async fn handle_swarm_event(&mut self, _e: SwarmEvent<NodeBehaviourEvent>) -> MainResult<()> {
+        Ok(())
+    }
 }
