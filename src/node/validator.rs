@@ -3,7 +3,7 @@ use crate::MainResult;
 use behaviour::ServerNodeBehaviour;
 
 /// Does some basic POW and validates blocks
-pub struct ValidatorNode {}
+pub struct ValidatorNode;
 
 #[derive(Debug)]
 pub enum ValidatorNodeEvent {}
@@ -12,13 +12,13 @@ impl NodeTypeEvent for ValidatorNodeEvent {}
 impl NodeType for ValidatorNode {
     type Behaviour = ServerNodeBehaviour;
     type Event = ValidatorNodeEvent;
-    fn new() -> Self
+
+    fn init_with_swarm(swarm: &mut Swarm<Self::Behaviour>) -> MainResult<Self>
     where
         Self: Sized,
     {
-        Self {}
+        Ok(Self)
     }
-
     async fn next_event(&mut self) -> MainResult<Option<Self::Event>> {
         // tokio::select! {
         // swarm_event = self.swarm.select_next_some() => {
@@ -29,7 +29,10 @@ impl NodeType for ValidatorNode {
         Ok(None)
     }
 
-    async fn handle_self_event(&mut self, e: Self::Event) -> MainResult<()> {
+    async fn handle_self_event(node: &mut Node<Self>, e: Self::Event) -> MainResult<()>
+    where
+        Self: Sized,
+    {
         tracing::warn!("server event: {e:#?}");
         Ok(())
     }

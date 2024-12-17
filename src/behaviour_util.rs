@@ -1,6 +1,6 @@
 use std::{cmp::Ordering, sync::LazyLock};
 
-use crate::heap::max::MaxHeapable;
+use crate::{chain::block::Blockchain, heap::max::MaxHeapable};
 use libp2p::{
     gossipsub::{IdentTopic, TopicHash},
     PeerId, StreamProtocol,
@@ -8,37 +8,39 @@ use libp2p::{
 use serde::{Deserialize, Serialize};
 
 pub const IDENTIFY_ID: &str = "/id/1.0.0";
-pub const KAD_PROTOCOL: StreamProtocol = StreamProtocol::new("/kademlia/1.0.0");
-pub type CompReqRes = libp2p::request_response::json::Behaviour<CompConnect, CompConnectConfirm>;
+pub type NetworkReqRes = libp2p::request_response::json::Behaviour<NetworkRequest, NetworkResponse>;
 
-// should send encryption key
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
-pub struct CompConnect {
-    pub tokens: f64,
+pub enum NetworkRequest {
+    Chain,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
-pub struct CompConnectConfirm {
-    pub ok: bool,
+pub enum NetworkResponse {
+    Chain(Blockchain),
 }
 
-pub enum SysTopic<'t> {
+pub enum NetworkTopic<'t> {
+    // All providers subscribe to Auction topic
+    Auction,
     Pending,
     Completed,
     Client(&'t PeerId),
 }
 
-impl<'t> From<&'t PeerId> for SysTopic<'t> {
+impl<'t> From<&'t PeerId> for NetworkTopic<'t> {
     fn from(value: &'t PeerId) -> Self {
         Self::Client(value)
     }
 }
 
-impl<'t> SysTopic<'t> {
+impl<'t> NetworkTopic<'t> {
+    const AUCTION: &'t str = "auction";
     const PENDING: &'t str = "tx_pending";
     const COMPLETED: &'t str = "tx_completed";
     pub fn publish(&self) -> TopicHash {
         match self {
+            Self::Auction => TopicHash::from_raw(Self::AUCTION),
             Self::Pending => TopicHash::from_raw(Self::PENDING),
             Self::Completed => TopicHash::from_raw(Self::COMPLETED),
             Self::Client(peer) => TopicHash::from_raw(peer.to_string()),
@@ -47,17 +49,12 @@ impl<'t> SysTopic<'t> {
 
     pub fn subscribe(&self) -> IdentTopic {
         match self {
+            Self::Auction => IdentTopic::new(Self::AUCTION),
             Self::Pending => IdentTopic::new(Self::PENDING),
             Self::Completed => IdentTopic::new(Self::COMPLETED),
             Self::Client(peer) => IdentTopic::new(peer.to_string()),
         }
     }
-    // pub const PENDING: LazyLock<TopicHash> = LazyLock::new(|| TopicHash::from_raw("tx_pending"));
-    // pub const COMPLETED: LazyLock<TopicHash> =
-    //     LazyLock::new(|| TopicHash::from_raw("tx_completed"));
-    // pub fn client(client_id: &PeerId) -> TopicHash {
-    //     TopicHash::from_raw(client_id.to_string())
-    // }
 }
 
 /// Sent by provider to request that it provide to client

@@ -1,13 +1,14 @@
-use std::hash::{DefaultHasher, Hash, Hasher};
-
-use crate::{behaviour::IDENTIFY_ID, MainResult};
+use crate::behaviour_util::{NetworkReqRes, NetworkRequest, NetworkResponse, IDENTIFY_ID};
 use libp2p::{
     gossipsub::{self, MessageAuthenticity},
     identify,
     identity::Keypair,
     rendezvous,
+    request_response::{self, ProtocolSupport},
     swarm::NetworkBehaviour,
+    StreamProtocol,
 };
+use std::hash::{DefaultHasher, Hash, Hasher};
 
 /// Behaviour that is shared between server/client
 /// Should never be manually instantiated
@@ -15,6 +16,7 @@ use libp2p::{
 pub struct SharedBehaviour {
     pub gossip: gossipsub::Behaviour,
     pub identify: identify::Behaviour,
+    pub req_res: NetworkReqRes,
 }
 
 impl SharedBehaviour {
@@ -37,19 +39,25 @@ impl SharedBehaviour {
         let gossip =
             gossipsub::Behaviour::new(MessageAuthenticity::Signed(keys), gossip_config).unwrap();
 
-        // let req_res = request_response::json::Behaviour::<CompConnect, CompConnectConfirm>::new(
-        //     [(
-        //         StreamProtocol::new("/compreqres/1.0.0"),
-        //         ProtocolSupport::Full,
-        //     )],
-        //     request_response::Config::default(),
-        // );
-        Self { gossip, identify }
+        let req_res =
+            libp2p::request_response::json::Behaviour::<NetworkRequest, NetworkResponse>::new(
+                [(
+                    StreamProtocol::new("/networkreqres/1.0.0"),
+                    ProtocolSupport::Full,
+                )],
+                libp2p::request_response::Config::default(),
+            );
+        Self {
+            gossip,
+            identify,
+            req_res,
+        }
     }
 }
 
 /// Any behaviour that a node can possibly have must implement this
 pub trait NodeNetworkBehaviour: NetworkBehaviour {
+    fn shared(&mut self) -> &mut SharedBehaviour;
     fn new(keys: Keypair) -> Self
     where
         Self: Sized;
@@ -62,6 +70,9 @@ pub struct ServerNodeBehaviour {
     pub rendezvous: rendezvous::server::Behaviour,
 }
 impl NodeNetworkBehaviour for ServerNodeBehaviour {
+    fn shared(&mut self) -> &mut SharedBehaviour {
+        &mut self.shared
+    }
     fn new(keys: Keypair) -> Self
     where
         Self: Sized,
@@ -81,6 +92,9 @@ pub struct ClientNodeBehaviour {
     pub rendezvous: rendezvous::client::Behaviour,
 }
 impl NodeNetworkBehaviour for ClientNodeBehaviour {
+    fn shared(&mut self) -> &mut SharedBehaviour {
+        &mut self.shared
+    }
     fn new(keys: Keypair) -> Self
     where
         Self: Sized,
@@ -97,6 +111,7 @@ impl NodeNetworkBehaviour for ClientNodeBehaviour {
 pub enum NodeBehaviourEvent {
     Identify(identify::Event),
     Gossip(gossipsub::Event),
+    ReqRes(request_response::Event<NetworkRequest, NetworkResponse>),
     RendezvousServer(rendezvous::server::Event),
     RendezvousClient(rendezvous::client::Event),
 }
@@ -106,12 +121,18 @@ impl From<SharedBehaviourEvent> for NodeBehaviourEvent {
         match value {
             SharedBehaviourEvent::Gossip(e) => Self::from(e),
             SharedBehaviourEvent::Identify(e) => Self::from(e),
+            SharedBehaviourEvent::ReqRes(e) => Self::from(e),
         }
     }
 }
 impl From<identify::Event> for NodeBehaviourEvent {
     fn from(value: identify::Event) -> Self {
         Self::Identify(value)
+    }
+}
+impl From<request_response::Event<NetworkRequest, NetworkResponse>> for NodeBehaviourEvent {
+    fn from(value: request_response::Event<NetworkRequest, NetworkResponse>) -> Self {
+        Self::ReqRes(value)
     }
 }
 impl From<gossipsub::Event> for NodeBehaviourEvent {

@@ -2,6 +2,7 @@ use clap::{Parser, Subcommand};
 use libp2p::identity::Keypair;
 use libp2p::{gossipsub, Multiaddr, PeerId};
 use llm_chain::node::{client::ClientNode, validator::ValidatorNode, Node, NodeType};
+use llm_chain::node::{BOOT_NODE_LISTEN_ADDR, BOOT_NODE_LOCAL_ADDR, BOOT_NODE_PEER_ID};
 use llm_chain::telemetry::TRACING;
 use llm_chain::CHAIN_TOPIC;
 use std::sync::LazyLock;
@@ -46,9 +47,6 @@ async fn main() -> llm_chain::MainResult<()> {
 /// ```shell
 /// head -c 32 /dev/urandom > boot.key
 /// ```
-const BOOT_NODE_PEER_ID: &str = "12D3KooWCwDGQ5jED2DCkdjLpfitvBr6KMDW3VkFLMxE4f67vUen";
-const BOOT_NODE_LOCAL_ADDR: &str = "/ip4/127.0.0.1/udp/62649/quic-v1";
-const BOOT_NODE_LISTEN_ADDR: &str = "/ip4/0.0.0.0/udp/62649/quic-v1";
 async fn create_boot_node() -> llm_chain::MainResult<Node<ValidatorNode>> {
     let mut bytes = std::fs::read("boot.key").unwrap();
     let keypair = Keypair::ed25519_from_bytes(&mut bytes)?;

@@ -1,4 +1,4 @@
-pub mod behaviour;
+pub mod behaviour_util;
 pub mod chain;
 pub mod heap;
 pub mod node;
