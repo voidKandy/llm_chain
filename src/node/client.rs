@@ -1,7 +1,8 @@
 use super::*;
-use crate::behaviour_util::{NetworkTopic, ProvisionBid};
-use crate::heap::max::MaxHeap;
-use crate::MainResult;
+use crate::{
+    util::{behaviour::ProvisionBid, heap::max::MaxHeap},
+    MainResult,
+};
 use behaviour::{ClientNodeBehaviour, NodeBehaviourEvent};
 use libp2p::{gossipsub, PeerId};
 use serde_json::json;

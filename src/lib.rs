@@ -1,6 +1,4 @@
-pub mod behaviour_util;
 pub mod blockchain;
-pub mod heap;
 pub mod node;
 pub mod runtime;
 pub mod telemetry;

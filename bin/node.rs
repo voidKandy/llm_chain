@@ -1,7 +1,9 @@
 use clap::{Parser, Subcommand};
 use libp2p::identity::Keypair;
 use libp2p::{gossipsub, Multiaddr, PeerId};
-use llm_chain::blockchain::chain::{BOOT_NODE_KEYPAIR, BOOT_NODE_PEER_ID};
+use llm_chain::blockchain::chain::{
+    BOOT_NODE_KEYPAIR, BOOT_NODE_LISTEN_ADDR, BOOT_NODE_LOCAL_ADDR, BOOT_NODE_PEER_ID,
+};
 use llm_chain::node::{client::ClientNode, validator::ValidatorNode, Node, NodeType};
 use llm_chain::telemetry::TRACING;
 use llm_chain::CHAIN_TOPIC;
@@ -44,13 +46,14 @@ async fn main() -> llm_chain::MainResult<()> {
 }
 
 async fn create_boot_node() -> llm_chain::MainResult<Node<ValidatorNode>> {
-    let keypair = LazyLock::force(&BOOT_NODE_KEYPAIR);
+    let b = BOOT_NODE_KEYPAIR;
+    let keypair = LazyLock::force(&b);
     let peer_id = PeerId::from_public_key(&keypair.public());
 
     assert_eq!(peer_id.to_string().as_str(), BOOT_NODE_PEER_ID);
     warn!("id: {peer_id:#?}");
 
-    let mut server_node = Node::<ValidatorNode>::try_from_keys(keypair).unwrap();
+    let mut server_node = Node::<ValidatorNode>::try_from_keys(keypair.clone()).unwrap();
     let chain_topic = gossipsub::IdentTopic::new(CHAIN_TOPIC);
     server_node
         .swarm

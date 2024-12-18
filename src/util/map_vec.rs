@@ -15,29 +15,6 @@ pub struct MapVec<K: hash::Hash + Eq, T> {
     last_inserted: Option<K>,
 }
 
-// impl<K, T> Into<Vec<T>> for MapVec<K, T>
-// where
-//     T: ?Sized
-//         + fmt::Debug
-//         + Clone
-//         + Serialize
-//         + for<'de> Deserialize<'de>
-//         + PartialEq
-//         + Contains<K>,
-//     K: fmt::Debug
-//         + Clone
-//         + Serialize
-//         + for<'de> Deserialize<'de>
-//         + PartialEq
-//         + hash::Hash
-//         + Eq
-//         + Sized,
-// {
-//     fn into(self) -> Vec<T> {
-//         self.data
-//     }
-// }
-
 impl<K, T> AsRef<[T]> for MapVec<K, T>
 where
     T: ?Sized
@@ -121,11 +98,15 @@ where
         self.map.keys()
     }
 
+    pub fn len(&self) -> usize {
+        self.data.len()
+    }
+
     pub fn push(&mut self, val: T) {
         let idx = self.map.len();
         self.last_inserted = Some(val.get_ref().clone());
         let _ = self.map.insert(val.get_ref().clone(), idx);
-        self.data[idx] = val;
+        self.data.push(val);
     }
 
     pub fn get(&self, key: &K) -> Option<&T> {
@@ -146,7 +127,7 @@ where
     }
 
     pub fn pop(&mut self) -> Option<(K, T)> {
-        let last = self.last_inserted.take().unwrap();
+        let last = self.last_inserted.take()?;
         let last_idx = self.map.len() - 1;
         if last_idx > 0 {
             self.last_inserted = Some(self.data[last_idx - 1].get_ref().clone());

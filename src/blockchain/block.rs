@@ -51,7 +51,7 @@ pub struct UnsignedBlock {
     mint: Mint,
 }
 
-struct Fields<'h> {
+pub struct Fields<'h> {
     index: &'h u64,
     timestamp: &'h str,
     previous_hash: &'h str,

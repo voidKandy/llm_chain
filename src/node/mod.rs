@@ -3,19 +3,18 @@ pub mod client;
 pub mod provider;
 pub mod validator;
 use crate::{
-    behaviour_util::{NetworkRequest, NetworkResponse},
-    blockchain::{block::Blockchain, transaction::Transaction},
+    blockchain::chain::Blockchain,
+    util::behaviour::{NetworkRequest, NetworkTopic},
     MainResult,
 };
 use behaviour::{NodeBehaviourEvent, NodeNetworkBehaviour};
 use futures::StreamExt;
 use libp2p::{
-    identity::{Keypair, SigningError},
+    gossipsub,
+    identity::Keypair,
     swarm::{NetworkBehaviour, Swarm, SwarmEvent},
-    PeerId,
 };
-use sha3::{Digest, Sha3_256};
-use std::{hash::DefaultHasher, str::FromStr, time::Duration};
+use std::time::Duration;
 
 pub struct Node<T: NodeType> {
     keys: Keypair,
@@ -23,11 +22,6 @@ pub struct Node<T: NodeType> {
     pub swarm: Swarm<T::Behaviour>,
     pub inner: T,
 }
-
-/// Eventually will be a list of addrs/ids
-pub const BOOT_NODE_PEER_ID: &str = "12D3KooWCwDGQ5jED2DCkdjLpfitvBr6KMDW3VkFLMxE4f67vUen";
-pub const BOOT_NODE_LOCAL_ADDR: &str = "/ip4/127.0.0.1/udp/62649/quic-v1";
-pub const BOOT_NODE_LISTEN_ADDR: &str = "/ip4/0.0.0.0/udp/62649/quic-v1";
 
 impl<T> Node<T>
 where
@@ -71,41 +65,47 @@ where
         event: impl Into<SwarmEvent<NodeBehaviourEvent>>,
     ) -> MainResult<()> {
         match Into::<SwarmEvent<NodeBehaviourEvent>>::into(event) {
-            SwarmEvent::ConnectionEstablished { peer_id, .. } => {
+            SwarmEvent::ConnectionEstablished { .. } => {}
+            SwarmEvent::Behaviour(NodeBehaviourEvent::Gossip(
+                libp2p::gossipsub::Event::Subscribed { peer_id, topic },
+            )) if peer_id != *self.swarm.local_peer_id()
+                && topic == NetworkTopic::ChainUpdate.publish() =>
+            {
                 T::Behaviour::shared(self.swarm.behaviour_mut())
-                    .req_res
-                    .send_request(&peer_id, NetworkRequest::Chain);
+                    .gossip
+                    .publish(topic, serde_json::to_vec(&self.blockchain)?)?;
             }
-
-            SwarmEvent::Behaviour(NodeBehaviourEvent::ReqRes(
-                libp2p::request_response::Event::Message { message, .. },
-            )) => match message {
-                libp2p::request_response::Message::Request {
-                    request, channel, ..
-                } => match request {
-                    NetworkRequest::Chain => {
-                        T::Behaviour::shared(self.swarm.behaviour_mut())
-                            .req_res
-                            .send_response(channel, NetworkResponse::Chain(self.blockchain.clone()))
-                            .expect("failed to send response");
-                    }
+            SwarmEvent::Behaviour(NodeBehaviourEvent::Gossip(
+                libp2p::gossipsub::Event::Message {
+                    message: gossipsub::Message { topic, data, .. },
+                    ..
                 },
+            )) if topic == NetworkTopic::ChainUpdate.publish() => {
+                let chain: Blockchain = serde_json::from_slice(&data)?;
 
-                libp2p::request_response::Message::Response { response, .. } => match response {
-                    NetworkResponse::Chain(bc) => {
-                        if bc.validate() {
-                            tracing::warn!("chain valid, updating");
-                            self.blockchain = bc;
-                        } else {
-                            tracing::warn!("chain invalid");
-                        }
-                    }
-                },
-            },
+                if self.replace_chain(chain) {
+                    tracing::warn!("replaced chain");
+                } else {
+                    tracing::warn!("did not replace chain");
+                }
+
+                // T::Behaviour::shared(self.swarm.behaviour_mut())
+                //     .gossip
+                //     .publish(topic, serde_json::to_vec(&self.blockchain)?)?;
+            }
 
             _ => {}
         }
         Ok(())
+    }
+
+    /// Put chain validation logic here
+    fn replace_chain(&mut self, potential_new_chain: Blockchain) -> bool {
+        if self.blockchain.len() < potential_new_chain.len() {
+            self.blockchain = potential_new_chain;
+            return true;
+        }
+        false
     }
 
     fn swarm(keys: Keypair) -> MainResult<Swarm<T::Behaviour>> {

@@ -26,7 +26,7 @@ impl<'h> From<&'h UTXO> for Fields<'h> {
     }
 }
 
-struct Fields<'h> {
+pub struct Fields<'h> {
     amount: &'h f64,
     receiver: &'h crate::util::PublicKeyBytes,
 }

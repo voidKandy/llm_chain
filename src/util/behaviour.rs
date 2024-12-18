@@ -1,30 +1,32 @@
 use super::heap::max::MaxHeapable;
-use crate::blockchain::block::Blockchain;
 use libp2p::{
     gossipsub::{IdentTopic, TopicHash},
-    PeerId, StreamProtocol,
+    PeerId,
 };
 use serde::{Deserialize, Serialize};
-use std::{cmp::Ordering, sync::LazyLock};
+use std::cmp::Ordering;
 
 pub const IDENTIFY_ID: &str = "/id/1.0.0";
 pub type NetworkReqRes = libp2p::request_response::json::Behaviour<NetworkRequest, NetworkResponse>;
 
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
 pub enum NetworkRequest {
-    Chain,
+    // Chain,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
 pub enum NetworkResponse {
-    Chain(Blockchain),
+    // Chain(Blockchain),
 }
 
 pub enum NetworkTopic<'t> {
-    // All providers subscribe to Auction topic
+    /// All validators subscribe to pending topic, everyone else need only publish
+    PendingTx,
+    /// All nodes subscribe to this topic, only validators publish
+    ChainUpdate,
+    /// All providers subscribe to Auction topic, clients need only to publish
     Auction,
-    Pending,
-    Completed,
+    /// Clients each subscribe to their own topic, providers publish when bidding
     Client(&'t PeerId),
 }
 
@@ -36,13 +38,13 @@ impl<'t> From<&'t PeerId> for NetworkTopic<'t> {
 
 impl<'t> NetworkTopic<'t> {
     const AUCTION: &'t str = "auction";
-    const PENDING: &'t str = "tx_pending";
-    const COMPLETED: &'t str = "tx_completed";
+    const PENDING_TX: &'t str = "pending";
+    const CHAIN_UPDATE: &'t str = "chain_update";
     pub fn publish(&self) -> TopicHash {
         match self {
             Self::Auction => TopicHash::from_raw(Self::AUCTION),
-            Self::Pending => TopicHash::from_raw(Self::PENDING),
-            Self::Completed => TopicHash::from_raw(Self::COMPLETED),
+            Self::PendingTx => TopicHash::from_raw(Self::PENDING_TX),
+            Self::ChainUpdate => TopicHash::from_raw(Self::CHAIN_UPDATE),
             Self::Client(peer) => TopicHash::from_raw(peer.to_string()),
         }
     }
@@ -50,8 +52,8 @@ impl<'t> NetworkTopic<'t> {
     pub fn subscribe(&self) -> IdentTopic {
         match self {
             Self::Auction => IdentTopic::new(Self::AUCTION),
-            Self::Pending => IdentTopic::new(Self::PENDING),
-            Self::Completed => IdentTopic::new(Self::COMPLETED),
+            Self::PendingTx => IdentTopic::new(Self::PENDING_TX),
+            Self::ChainUpdate => IdentTopic::new(Self::CHAIN_UPDATE),
             Self::Client(peer) => IdentTopic::new(peer.to_string()),
         }
     }

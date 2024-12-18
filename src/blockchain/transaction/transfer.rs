@@ -23,7 +23,7 @@ impl Contains<String> for Transfer {
     }
 }
 
-struct Fields<'h> {
+pub struct Fields<'h> {
     timestamp: &'h str,
     sender: &'h PublicKeyBytes,
     receiver: &'h PublicKeyBytes,

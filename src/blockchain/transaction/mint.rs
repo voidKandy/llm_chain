@@ -12,7 +12,7 @@ pub struct Mint {
     pub(super) outputs: MapVec<PublicKeyBytes, super::UTXO>,
 }
 
-struct Fields<'h> {
+pub struct Fields<'h> {
     timestamp: &'h str,
     outputs: &'h [super::UTXO],
 }

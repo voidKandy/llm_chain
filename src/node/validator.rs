@@ -19,7 +19,9 @@ impl NodeType for ValidatorNode {
     where
         Self: Sized,
     {
-        Ok(Self)
+        Ok(Self {
+            mempool: MapVec::new(),
+        })
     }
     async fn next_event(&mut self) -> MainResult<Option<Self::Event>> {
         // tokio::select! {

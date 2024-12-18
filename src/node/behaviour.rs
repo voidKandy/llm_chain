@@ -1,4 +1,3 @@
-use crate::behaviour_util::{NetworkReqRes, NetworkRequest, NetworkResponse, IDENTIFY_ID};
 use libp2p::{
     gossipsub::{self, MessageAuthenticity},
     identify,
@@ -9,6 +8,8 @@ use libp2p::{
     StreamProtocol,
 };
 use std::hash::{DefaultHasher, Hash, Hasher};
+
+use crate::util::behaviour::{NetworkReqRes, NetworkRequest, NetworkResponse, IDENTIFY_ID};
 
 /// Behaviour that is shared between server/client
 /// Should never be manually instantiated

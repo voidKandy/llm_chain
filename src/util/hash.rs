@@ -15,10 +15,10 @@ where
     type Fields: From<&'h Self>;
     fn hash_ref(&self) -> &str;
     fn hash_fields(fields: Self::Fields) -> Output<Hasher>;
-    fn valid(&self) -> bool {
+    fn valid(&'h self) -> bool {
         self.hash_ref() == Self::output_to_string(self.my_hash())
     }
-    fn my_hash(&self) -> Output<Hasher> {
+    fn my_hash(&'h self) -> Output<Hasher> {
         let fields = Self::Fields::from(self);
         Self::hash_fields(fields)
     }
