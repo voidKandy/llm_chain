@@ -1,9 +1,7 @@
-use std::sync::LazyLock;
-
+use crate::helpers::TEST_TRACING;
 use llm_chain::util::map_vec::*;
 use serde::{Deserialize, Serialize};
-
-use crate::helpers::TEST_TRACING;
+use std::sync::LazyLock;
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 struct TestVal {

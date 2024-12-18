@@ -11,7 +11,6 @@ name="node"
 path="bin/node.rs"
 
 
-
 [dependencies]
 futures = "0.3.31"
 chrono = "0.4.38"

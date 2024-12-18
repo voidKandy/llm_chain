@@ -14,9 +14,7 @@ pub struct ClientNode {
 }
 
 pub enum ClientNodeState {
-    Idle {
-        stdin: Lines<BufReader<Stdin>>,
-    },
+    Idle,
     Auctioning {
         start: std::time::Instant,
         bids: MaxHeap<ProvisionBid>,
@@ -82,18 +80,13 @@ impl NodeType for ClientNode {
             .subscribe(&NetworkTopic::from(&this_peer_id).subscribe())
             .expect("failed to subscribe to local topic");
         Ok(Self {
-            state: ClientNodeState::Idle {
-                stdin: tokio::io::BufReader::new(tokio::io::stdin()).lines(),
-            },
+            state: ClientNodeState::Idle,
         })
     }
 
     async fn next_event(&mut self) -> MainResult<Option<Self::Event>> {
         match &mut self.state {
-            ClientNodeState::Idle { stdin } => Ok(stdin
-                .next_line()
-                .await?
-                .and_then(|l| Some(ClientNodeEvent::UserInput(l)))),
+            ClientNodeState::Idle => Ok(None),
             ClientNodeState::Auctioning { start, bids } => {
                 let elapsed = start.elapsed();
                 tracing::warn!("elapsed: {elapsed:#?}");

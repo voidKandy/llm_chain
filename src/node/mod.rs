@@ -1,6 +1,7 @@
 pub mod behaviour;
 pub mod client;
 pub mod provider;
+mod user_input;
 pub mod validator;
 use crate::{
     blockchain::chain::Blockchain,
@@ -15,9 +16,11 @@ use libp2p::{
     swarm::{NetworkBehaviour, Swarm, SwarmEvent},
 };
 use std::time::Duration;
+use tokio::io::{AsyncBufReadExt, BufReader, Lines, Stdin};
 
 pub struct Node<T: NodeType> {
     keys: Keypair,
+    stdin: Lines<BufReader<Stdin>>,
     blockchain: Blockchain,
     pub swarm: Swarm<T::Behaviour>,
     pub inner: T,
@@ -39,6 +42,7 @@ where
             swarm,
             blockchain,
             keys,
+            stdin: tokio::io::BufReader::new(tokio::io::stdin()).lines(),
         })
     }
 
@@ -51,6 +55,9 @@ where
                         self.handle_swarm_event(event).await?
                     }
                 }
+                Ok(Some(line)) = self.stdin.next_line() => {
+                    self.handle_user_input(line).await?;
+                },
                 Ok(Some(inner_event)) = self.inner.next_event() => {
                     tracing::warn!("inner event: {inner_event:#?}");
                     T::handle_self_event(self, inner_event).await?;
