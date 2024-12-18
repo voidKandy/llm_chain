@@ -1,8 +1,8 @@
 use clap::{Parser, Subcommand};
 use libp2p::identity::Keypair;
 use libp2p::{gossipsub, Multiaddr, PeerId};
+use llm_chain::blockchain::chain::{BOOT_NODE_KEYPAIR, BOOT_NODE_PEER_ID};
 use llm_chain::node::{client::ClientNode, validator::ValidatorNode, Node, NodeType};
-use llm_chain::node::{BOOT_NODE_LISTEN_ADDR, BOOT_NODE_LOCAL_ADDR, BOOT_NODE_PEER_ID};
 use llm_chain::telemetry::TRACING;
 use llm_chain::CHAIN_TOPIC;
 use std::sync::LazyLock;
@@ -43,14 +43,10 @@ async fn main() -> llm_chain::MainResult<()> {
     }
 }
 
-/// Create boot node with private key in boot.key, which was generated with
-/// ```shell
-/// head -c 32 /dev/urandom > boot.key
-/// ```
 async fn create_boot_node() -> llm_chain::MainResult<Node<ValidatorNode>> {
-    let mut bytes = std::fs::read("boot.key").unwrap();
-    let keypair = Keypair::ed25519_from_bytes(&mut bytes)?;
+    let keypair = LazyLock::force(&BOOT_NODE_KEYPAIR);
     let peer_id = PeerId::from_public_key(&keypair.public());
+
     assert_eq!(peer_id.to_string().as_str(), BOOT_NODE_PEER_ID);
     warn!("id: {peer_id:#?}");
 

@@ -4,7 +4,7 @@ pub mod provider;
 pub mod validator;
 use crate::{
     behaviour_util::{NetworkRequest, NetworkResponse},
-    chain::{block::Blockchain, transaction::Transaction},
+    blockchain::{block::Blockchain, transaction::Transaction},
     MainResult,
 };
 use behaviour::{NodeBehaviourEvent, NodeNetworkBehaviour};

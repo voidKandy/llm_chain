@@ -1,11 +1,11 @@
-use std::{cmp::Ordering, sync::LazyLock};
-
-use crate::{chain::block::Blockchain, heap::max::MaxHeapable};
+use super::heap::max::MaxHeapable;
+use crate::blockchain::block::Blockchain;
 use libp2p::{
     gossipsub::{IdentTopic, TopicHash},
     PeerId, StreamProtocol,
 };
 use serde::{Deserialize, Serialize};
+use std::{cmp::Ordering, sync::LazyLock};
 
 pub const IDENTIFY_ID: &str = "/id/1.0.0";
 pub type NetworkReqRes = libp2p::request_response::json::Behaviour<NetworkRequest, NetworkResponse>;

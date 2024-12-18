@@ -1,9 +1,11 @@
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, fmt, hash};
+use std::{
+    collections::{hash_map::Keys, HashMap},
+    fmt, hash,
+};
 
 pub trait Contains<T> {
     fn get_ref(&self) -> &T;
-    fn get_mut(&mut self) -> &mut T;
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
@@ -11,6 +13,78 @@ pub struct MapVec<K: hash::Hash + Eq, T> {
     data: Vec<T>,
     map: HashMap<K, usize>,
     last_inserted: Option<K>,
+}
+
+// impl<K, T> Into<Vec<T>> for MapVec<K, T>
+// where
+//     T: ?Sized
+//         + fmt::Debug
+//         + Clone
+//         + Serialize
+//         + for<'de> Deserialize<'de>
+//         + PartialEq
+//         + Contains<K>,
+//     K: fmt::Debug
+//         + Clone
+//         + Serialize
+//         + for<'de> Deserialize<'de>
+//         + PartialEq
+//         + hash::Hash
+//         + Eq
+//         + Sized,
+// {
+//     fn into(self) -> Vec<T> {
+//         self.data
+//     }
+// }
+
+impl<K, T> AsRef<[T]> for MapVec<K, T>
+where
+    T: ?Sized
+        + fmt::Debug
+        + Clone
+        + Serialize
+        + for<'de> Deserialize<'de>
+        + PartialEq
+        + Contains<K>,
+    K: fmt::Debug
+        + Clone
+        + Serialize
+        + for<'de> Deserialize<'de>
+        + PartialEq
+        + hash::Hash
+        + Eq
+        + Sized,
+{
+    fn as_ref(&self) -> &[T] {
+        self.data.as_ref()
+    }
+}
+
+impl<K, T> From<Vec<T>> for MapVec<K, T>
+where
+    T: ?Sized
+        + fmt::Debug
+        + Clone
+        + Serialize
+        + for<'de> Deserialize<'de>
+        + PartialEq
+        + Contains<K>,
+    K: fmt::Debug
+        + Clone
+        + Serialize
+        + for<'de> Deserialize<'de>
+        + PartialEq
+        + hash::Hash
+        + Eq
+        + Sized,
+{
+    fn from(value: Vec<T>) -> Self {
+        value.into_iter().fold(Self::new(), |mut acc, v| {
+            acc.push(v);
+            acc
+        })
+    }
 }
 
 impl<K, T> MapVec<K, T>
@@ -41,6 +115,10 @@ where
 
     pub fn iter_vals(&self) -> std::slice::Iter<'_, T> {
         self.data.iter()
+    }
+
+    pub fn iter_keys(&self) -> Keys<'_, K, usize> {
+        self.map.keys()
     }
 
     pub fn push(&mut self, val: T) {

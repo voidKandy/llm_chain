@@ -1,9 +1,11 @@
 use super::*;
-use crate::MainResult;
+use crate::{blockchain::transaction::transfer::Transfer, util::map_vec::MapVec, MainResult};
 use behaviour::ServerNodeBehaviour;
 
 /// Does some basic POW and validates blocks
-pub struct ValidatorNode;
+pub struct ValidatorNode {
+    mempool: MapVec<String, Transfer>,
+}
 
 #[derive(Debug)]
 pub enum ValidatorNodeEvent {}
