@@ -1,7 +1,7 @@
-use libp2p::identity::SigningError;
-
 pub mod block;
+pub mod chain;
 pub mod transaction;
+use libp2p::identity::SigningError;
 
 pub type ChainResult<T> = Result<T, ChainError>;
 

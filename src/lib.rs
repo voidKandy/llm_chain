@@ -1,9 +1,10 @@
 pub mod behaviour_util;
-pub mod chain;
+pub mod blockchain;
 pub mod heap;
 pub mod node;
 pub mod runtime;
 pub mod telemetry;
+pub mod util;
 
 // these should be mapped to real models down the line
 const MODEL_ID_0: &str = "model_0";
