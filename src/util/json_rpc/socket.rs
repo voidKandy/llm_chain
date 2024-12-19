@@ -67,17 +67,12 @@ pub async fn next_request(stream: &TcpStream) -> MainResult<Option<Request>> {
     match stream.try_read(&mut buffer) {
         Err(ref e) if e.kind() == tokio::io::ErrorKind::WouldBlock => Ok(None),
         Ok(0) => Ok(None),
-        Ok(n) if n <= REQ_SIZE => {
-            // let  raw = String::from_utf8_lossy(&buffer[..n]);
-            // tracing::info!("Raw input (length={}): {:?}", raw.len(), raw);
-            //
-            match serde_json::from_slice::<Request>(&buffer[..n]) {
-                Ok(req) => {
-                    return Ok(Some(req));
-                }
-                Err(err) => Err(format!("error deserializing request: {err}").into()),
+        Ok(n) if n <= REQ_SIZE => match serde_json::from_slice::<Request>(&buffer[..n]) {
+            Ok(req) => {
+                return Ok(Some(req));
             }
-        }
+            Err(err) => Err(format!("error deserializing request: {err}").into()),
+        },
         Ok(n) => {
             tracing::warn!("read an unexpected number of bytes, expected: {REQ_SIZE} got: {n}");
             Ok(None)

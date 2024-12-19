@@ -5,8 +5,16 @@ use serde::{Deserialize, Serialize};
 use super::*;
 
 #[derive(Debug)]
-enum RequestMethod {
+pub enum RequestMethod {
     PeerCount(GetPeerCountRequest),
+}
+
+impl RequestMethod {
+    pub fn into_socket_request(self, id: u32, jsonrpc: &str) -> socket::Request {
+        match self {
+            Self::PeerCount(rq) => rq.into_socket_request(id, jsonrpc).unwrap(),
+        }
+    }
 }
 
 impl TryFromSocketRequest for RequestMethod {
@@ -23,9 +31,9 @@ pub struct GetPeerCountResponse {
     count: u32,
 }
 
-#[derive(RpcRequest, Debug, Clone)]
+#[derive(RpcRequest, Debug, Clone, Serialize, Deserialize)]
 #[rpc_request(namespace = "net")]
-pub struct GetPeerCountRequest {}
+pub struct GetPeerCountRequest;
 
 #[allow(private_interfaces)]
 impl<T> Node<T>

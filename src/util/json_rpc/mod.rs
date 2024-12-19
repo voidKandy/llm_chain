@@ -15,6 +15,16 @@ impl Namespace {
     const CLIENT: &str = "client";
 }
 
+impl AsRef<str> for Namespace {
+    fn as_ref(&self) -> &str {
+        match self {
+            Self::Chain => Self::CHAIN,
+            Self::Net => Self::NET,
+            Self::Client => Self::CLIENT,
+        }
+    }
+}
+
 impl<'a> TryFrom<&'a str> for Namespace {
     type Error = std::io::Error;
     fn try_from(value: &'a str) -> Result<Self, Self::Error> {
@@ -40,10 +50,22 @@ pub trait RpcResponse:
 {
 }
 
-pub trait RpcRequest: std::fmt::Debug + Clone {
+pub trait RpcRequest:
+    std::fmt::Debug + Clone + serde::Serialize + for<'de> serde::Deserialize<'de>
+{
     type Response: RpcResponse;
     fn method() -> &'static str;
     fn namespace() -> Namespace;
+    fn into_socket_request(&self, id: u32, jsonrpc: &str) -> MainResult<socket::Request> {
+        let params = serde_json::to_value(&self)?;
+        let method = format!("{}_{}", Self::namespace().as_ref(), Self::method());
+        Ok(socket::Request {
+            jsonrpc: jsonrpc.to_string(),
+            method,
+            params,
+            id: format!("{id}"),
+        })
+    }
     fn try_from_request(req: &socket::Request) -> MainResult<Option<Self>> {
         if let Some((namespace_str, method_str)) = req.method.split_once('_') {
             let namespace = Namespace::try_from(namespace_str).unwrap();

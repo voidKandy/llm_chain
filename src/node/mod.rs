@@ -1,7 +1,7 @@
 pub mod behaviour;
 pub mod client;
 pub mod provider;
-mod rpc;
+pub mod rpc;
 pub mod validator;
 use crate::{
     blockchain::chain::Blockchain,

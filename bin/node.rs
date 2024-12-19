@@ -18,6 +18,8 @@ use tracing::warn;
 struct Args {
     #[command(subcommand)]
     command: Command,
+    #[arg(short = 'a')]
+    rpc_addr: Option<String>,
 }
 
 #[derive(Subcommand, Debug)]
@@ -34,28 +36,31 @@ async fn main() -> llm_chain::MainResult<()> {
 
     match args.command {
         Command::Client => {
-            let mut node = create_client_node_and_bootstrap().await?;
+            let mut node = create_client_node_and_bootstrap(args.rpc_addr).await?;
             node.main_loop().await
         }
 
         Command::Boot => {
-            let mut node = create_boot_node().await?;
+            let mut node = create_boot_node(args.rpc_addr).await?;
             warn!("created node");
             node.main_loop().await
         }
     }
 }
 
-async fn create_boot_node() -> llm_chain::MainResult<Node<ValidatorNode>> {
+async fn create_boot_node(addr: Option<String>) -> llm_chain::MainResult<Node<ValidatorNode>> {
     let b = BOOT_NODE_KEYPAIR;
     let keypair = LazyLock::force(&b);
     let peer_id = PeerId::from_public_key(&keypair.public());
 
     assert_eq!(peer_id.to_string().as_str(), BOOT_NODE_PEER_ID);
     warn!("id: {peer_id:#?}");
-    let mut server_node = Node::<ValidatorNode>::try_from_keys(keypair.clone(), "127.0.0.1:0")
-        .await
-        .unwrap();
+    let mut server_node = Node::<ValidatorNode>::try_from_keys(
+        keypair.clone(),
+        addr.unwrap_or("127.0.0.1:0".to_string()),
+    )
+    .await
+    .unwrap();
     let chain_topic = gossipsub::IdentTopic::new(CHAIN_TOPIC);
     server_node
         .swarm
@@ -71,13 +76,16 @@ async fn create_boot_node() -> llm_chain::MainResult<Node<ValidatorNode>> {
     Ok(server_node)
 }
 
-async fn create_client_node_and_bootstrap() -> llm_chain::MainResult<Node<ClientNode>> {
+async fn create_client_node_and_bootstrap(
+    addr: Option<String>,
+) -> llm_chain::MainResult<Node<ClientNode>> {
     let keypair = Keypair::generate_ed25519();
     let peer_id = PeerId::from_public_key(&keypair.public());
     warn!("id: {peer_id:#?}");
-    let mut client_node = Node::<ClientNode>::try_from_keys(keypair, "127.0.0.1:0")
-        .await
-        .unwrap();
+    let mut client_node =
+        Node::<ClientNode>::try_from_keys(keypair, addr.unwrap_or("127.0.0.1:0".to_string()))
+            .await
+            .unwrap();
 
     let chain_topic = gossipsub::IdentTopic::new(CHAIN_TOPIC);
     client_node
