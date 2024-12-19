@@ -13,6 +13,7 @@ path="bin/node.rs"
 [[bin]]
 name="rpc"
 path="bin/rpc.rs"
+
 [workspace]
 members = ["macros",]
 

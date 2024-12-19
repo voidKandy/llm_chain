@@ -1,12 +1,12 @@
 pub mod methods;
 pub mod socket;
-use macros::RpcMessageParams;
+use ::macros::RpcRequest;
 use socket::Request;
 
 use crate::MainResult;
 
 #[derive(Debug, Copy, Clone, PartialEq)]
-enum Namespace {
+pub enum Namespace {
     Chain,
     Net,
     Client,
@@ -32,11 +32,16 @@ impl<'a> TryFrom<&'a str> for Namespace {
     }
 }
 
-trait RpcMessageParams {
-    fn try_from_socket_request(req: &socket::Request) -> MainResult<Option<Self>>
-    where
-        Self: Sized,
-    {
+pub trait RpcResponse:
+    std::fmt::Debug + Clone + serde::Serialize + for<'de> serde::Deserialize<'de>
+{
+}
+
+pub trait RpcRequest: std::fmt::Debug + Clone {
+    type Response: RpcResponse;
+    fn method() -> &'static str;
+    fn namespace() -> Namespace;
+    fn try_from_request(req: &socket::Request) -> MainResult<Option<Self>> {
         if let Some((namespace_str, method_str)) = req.method.split_once('_') {
             let namespace = Namespace::try_from(namespace_str).unwrap();
             if namespace != Self::namespace() || method_str != Self::method() {
@@ -50,17 +55,4 @@ trait RpcMessageParams {
     fn try_from_json(json: &serde_json::Value) -> MainResult<Self>
     where
         Self: Sized;
-    fn method() -> &'static str;
-    fn namespace() -> Namespace;
 }
-
-#[derive(RpcMessageParams)]
-#[rpc_message(namespace = "chain")]
-struct TestMessageParams {
-    param1: String,
-}
-
-// #[test]
-// fn derive() {
-// }
-//     assert_eq!(Foo::method(), 0);

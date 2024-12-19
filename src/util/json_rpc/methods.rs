@@ -1,37 +1,27 @@
+use super::*;
+use crate::MainErr;
+use ::macros::RpcRequest;
 use serde::{Deserialize, Serialize};
 
-/// this will be coerced from the 'method' field of Request
-/// Just like the eth JSON RPC API, the string will be structured as follows:
-/// <namespace>_<method>
-/// Which map to variants, and subtypes of this enum
-/// I'm not entirely sure how to separate these subtypes, but I think this is a good place to start
-#[derive(Debug, Clone, PartialEq)]
-pub enum Method {
-    Chain(ChainMethod),
-    Net(NetMethod),
+enum RequestMethod {
+    Test(GetPeerCountRequest),
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum ChainMethod {
-    GetTransaction,
+impl TryFrom<socket::Request> for RequestMethod {
+    type Error = MainErr;
+    fn try_from(req: socket::Request) -> Result<Self, Self::Error> {
+        if let Some(req) = GetPeerCountRequest::try_from_request(&req)? {
+            return Ok(Self::Test(req));
+        }
+        Err("Could not get request".into())
+    }
 }
 
-#[derive(Debug, Clone, PartialEq)]
-// #[serde(rename_all = "camelCase")]
-pub enum NetMethod {}
-
-mod tests {
-    use super::Method;
-
-    // #[test]
-    // fn test_method_deserialize() {
-    // let test = "chain_getTransaction";
-    // let expected = Method::Chain(super::ChainMethod::GetTransaction);
-
-    // let str = serde_json::to_string(&super::ChainMethod::GetTransaction).unwrap();
-    // println!("string: {str}");
-
-    // let method = Method::try_from(test).unwrap();
-    //     assert_eq!(expected, method);
-    // }
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GetPeerCountResponse {
+    count: u32,
 }
+
+#[derive(RpcRequest, Debug, Clone)]
+#[rpc_request(namespace = "net")]
+pub struct GetPeerCountRequest {}

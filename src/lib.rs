@@ -12,4 +12,5 @@ const MODEL_ID_1: &str = "model_1";
 // static PEER_ID: LazyLock<PeerId> = LazyLock::new(|| PeerId::from(KEYS.public()));
 pub const CHAIN_TOPIC: &str = "chain_updates";
 
-pub type MainResult<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync + 'static>>;
+pub type MainErr = Box<dyn std::error::Error + Send + Sync + 'static>;
+pub type MainResult<T> = std::result::Result<T, MainErr>;

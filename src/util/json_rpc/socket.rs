@@ -24,7 +24,7 @@ pub struct Response {
     /// This member is REQUIRED on success.
     /// This member MUST NOT exist if there was an error invoking the method.
     /// The value of this member is determined by the method invoked on the Server.
-    pub result: String,
+    pub result: Option<serde_json::Value>,
 
     /// This member is REQUIRED on error.
     /// This member MUST NOT exist if there was no error triggered during invocation.
