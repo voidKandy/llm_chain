@@ -10,6 +10,11 @@ path="src/lib.rs"
 name="node"
 path="bin/node.rs"
 
+[[bin]]
+name="rpc"
+path="bin/rpc.rs"
+[workspace]
+members = ["macros",]
 
 [dependencies]
 futures = "0.3.31"

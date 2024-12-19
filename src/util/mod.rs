@@ -1,6 +1,7 @@
 pub mod behaviour;
 pub mod hash;
 pub mod heap;
+pub mod json_rpc;
 pub mod map_vec;
 use chrono::Utc;
 use libp2p::identity::PublicKey;
