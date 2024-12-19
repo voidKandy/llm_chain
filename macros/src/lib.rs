@@ -1,7 +1,9 @@
+use core::panic;
+
 use darling::FromDeriveInput;
 use proc_macro::{self, TokenStream};
 use quote::{format_ident, quote};
-use syn::{parse_macro_input, DataStruct, DeriveInput};
+use syn::{parse_macro_input, Data, DataEnum, DataStruct, DeriveInput, TypePath};
 
 // https://github.com/imbolc/rust-derive-macro-guide
 #[derive(FromDeriveInput, Default)]
@@ -12,7 +14,7 @@ struct Opts {
 }
 
 #[proc_macro_derive(RpcRequest, attributes(rpc_request))]
-pub fn derive(input: TokenStream) -> TokenStream {
+pub fn derive_rpc_req(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input);
     let opts = Opts::from_derive_input(&input).expect("Wrong options");
     let DeriveInput { ident, data, .. } = input;
@@ -97,6 +99,69 @@ pub fn derive(input: TokenStream) -> TokenStream {
         }
         _ => {
             panic!("cannot derive this on anything but a struct")
+        }
+    }
+}
+
+#[proc_macro_derive(SocketRequestWrapper)]
+pub fn derive_req_wrapper(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input);
+    let DeriveInput { ident, data, .. } = input;
+    match data {
+        Data::Enum(DataEnum { variants, .. }) => {
+            let mut into_socket_req_body = quote! {};
+            let mut from_socket_req_body = quote! {};
+            for v in variants {
+                let id = v.ident;
+                let enum_typ = match v.fields {
+                    syn::Fields::Unnamed(t) => match t.unnamed.iter().next().cloned().unwrap().ty {
+                        syn::Type::Path(TypePath { path, .. }) => {
+                            path.segments.iter().next().unwrap().ident.clone()
+                        }
+                        other => panic!("Expected type path as unnamed variant, got: {other:#?}"),
+                    },
+                    _ => panic!("only unnamed struct variants supported"),
+                };
+                let not_rpc_request = format!("variant {id} does not implement RpcRequest");
+                into_socket_req_body = quote! {
+                    #into_socket_req_body
+                    Self::#id(rq) => rq.into_socket_request(id, jsonrpc).expect(#not_rpc_request),
+                };
+
+                from_socket_req_body = quote! {
+                    #from_socket_req_body
+                    if let Some(req) = #enum_typ::try_from_request(&req)? {
+                        return Ok(Self::#id(req));
+                    }
+                };
+            }
+
+            let into_socket_req = quote! {
+                fn into_socket_request(self, id: u32, jsonrpc: &str) -> socket::Request {
+                    match self {
+                        #into_socket_req_body
+                    }
+                }
+            };
+
+            let from_socket_req = quote! {
+                fn try_from_socket_req(req: socket::Request) -> MainResult<Self> {
+                    #from_socket_req_body
+                    Err("Could not get request".into())
+                }
+            };
+
+            let output = quote! {
+                impl SocketRequestWrapper for #ident {
+                    #into_socket_req
+                    #from_socket_req
+
+                }
+            };
+            output.into()
+        }
+        _ => {
+            panic!("cannot derive this on anything but an enum")
         }
     }
 }

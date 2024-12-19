@@ -40,7 +40,10 @@ impl<'a> TryFrom<&'a str> for Namespace {
     }
 }
 
-pub trait TryFromSocketRequest {
+pub trait SocketRequestWrapper {
+    fn into_socket_request(self, id: u32, jsonrpc: &str) -> socket::Request
+    where
+        Self: Sized;
     fn try_from_socket_req(req: socket::Request) -> MainResult<Self>
     where
         Self: Sized;

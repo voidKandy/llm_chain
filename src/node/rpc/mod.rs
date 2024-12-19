@@ -3,38 +3,18 @@ use super::*;
 use crate::{
     blockchain::transaction::{mint::Mint, transfer::Transfer, UTXO},
     util::{
-        json_rpc::{RpcRequest, TryFromSocketRequest},
+        json_rpc::{RpcRequest, SocketRequestWrapper},
         map_vec::{Contains, MapVec},
         PublicKeyBytes,
     },
 };
+use ::macros::SocketRequestWrapper;
 pub use messages::*;
 
-#[derive(Debug)]
-pub enum RequestMethod {
+#[derive(SocketRequestWrapper, Debug)]
+pub enum RequestWrapper {
     PeerCount(GetPeerCountRequest),
     GetBalance(GetBalanceRequest),
-}
-
-impl RequestMethod {
-    pub fn into_socket_request(self, id: u32, jsonrpc: &str) -> socket::Request {
-        match self {
-            Self::PeerCount(rq) => rq.into_socket_request(id, jsonrpc).unwrap(),
-            Self::GetBalance(rq) => rq.into_socket_request(id, jsonrpc).unwrap(),
-        }
-    }
-}
-
-impl TryFromSocketRequest for RequestMethod {
-    fn try_from_socket_req(req: socket::Request) -> MainResult<Self> {
-        if let Some(req) = GetPeerCountRequest::try_from_request(&req)? {
-            return Ok(Self::PeerCount(req));
-        }
-        if let Some(req) = GetBalanceRequest::try_from_request(&req)? {
-            return Ok(Self::GetBalance(req));
-        }
-        Err("Could not get request".into())
-    }
 }
 
 #[allow(private_interfaces)]
@@ -47,11 +27,11 @@ where
 {
     pub async fn process_request_method(
         &mut self,
-        req_meth: RequestMethod,
+        req: RequestWrapper,
     ) -> MainResult<Result<serde_json::Value, socket::Error>> {
-        tracing::warn!("processing: {req_meth:#?}");
-        match req_meth {
-            RequestMethod::PeerCount(_) => {
+        tracing::warn!("processing: {req:#?}");
+        match req {
+            RequestWrapper::PeerCount(_) => {
                 let count = T::Behaviour::shared(self.swarm.behaviour_mut())
                     .gossip
                     .all_peers()
@@ -60,7 +40,7 @@ where
                 let json = serde_json::to_value(response)?;
                 Ok(Ok(json))
             }
-            RequestMethod::GetBalance(_get_bal) => {
+            RequestWrapper::GetBalance(_get_bal) => {
                 let my_pub_key = PublicKeyBytes::from(self.keys.public());
 
                 // should evevnutally use the given address, but for now will return local addr
@@ -97,7 +77,7 @@ where
     ) -> MainResult<socket::Response> {
         let rpc_version = req.jsonrpc.clone();
         let req_id = req.id.clone();
-        let method = RequestMethod::try_from_socket_req(req)?;
+        let method = RequestWrapper::try_from_socket_req(req)?;
         let response = match self.process_request_method(method).await? {
             Ok(json) => socket::Response {
                 jsonrpc: rpc_version,
