@@ -1,7 +1,11 @@
 pub mod methods;
 pub mod socket;
-use macros::{RpcMessage, RpcMessageParams};
+use macros::RpcMessageParams;
+use socket::Request;
 
+use crate::MainResult;
+
+#[derive(Debug, Copy, Clone, PartialEq)]
 enum Namespace {
     Chain,
     Net,
@@ -29,6 +33,23 @@ impl<'a> TryFrom<&'a str> for Namespace {
 }
 
 trait RpcMessageParams {
+    fn try_from_socket_request(req: &socket::Request) -> MainResult<Option<Self>>
+    where
+        Self: Sized,
+    {
+        if let Some((namespace_str, method_str)) = req.method.split_once('_') {
+            let namespace = Namespace::try_from(namespace_str).unwrap();
+            if namespace != Self::namespace() || method_str != Self::method() {
+                return Ok(None);
+            }
+
+            return Self::try_from_json(&req.params).and_then(|me| Ok(Some(me)));
+        }
+        Ok(None)
+    }
+    fn try_from_json(json: &serde_json::Value) -> MainResult<Self>
+    where
+        Self: Sized;
     fn method() -> &'static str;
     fn namespace() -> Namespace;
 }
