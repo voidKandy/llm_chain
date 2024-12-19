@@ -9,6 +9,7 @@ use syn::{parse_macro_input, Data, DataEnum, DataStruct, DeriveInput, TypePath};
 #[derive(FromDeriveInput, Default)]
 #[darling(default, attributes(rpc_request))]
 struct Opts {
+    // formatted "type:variant"
     namespace: String,
     response: Option<String>,
 }
@@ -78,9 +79,14 @@ pub fn derive_rpc_req(input: TokenStream) -> TokenStream {
             };
 
             let ns = opts.namespace;
+            let (ns_type, ns_var) = ns
+                .split_once(':')
+                .expect("expected namespace attribute to have a ':'");
+
+            let ns_type_id = format_ident!("{ns_type}");
             let namespace = quote! {
                 fn namespace() -> Namespace {
-                 Namespace::try_from(#ns).unwrap()
+                     Self::Namespace::try_from_str(#ns_var).unwrap()
 
                 }
             };
@@ -89,6 +95,7 @@ pub fn derive_rpc_req(input: TokenStream) -> TokenStream {
                 impl RpcResponse for #response_struct_name {}
                 impl RpcRequest for #ident {
                     type Response = #response_struct_name;
+                    type Namespace = #ns_type_id;
                     #from_json
                     #method_name
                     #namespace
@@ -158,6 +165,69 @@ pub fn derive_req_wrapper(input: TokenStream) -> TokenStream {
 
                 }
             };
+            output.into()
+        }
+        _ => {
+            panic!("cannot derive this on anything but an enum")
+        }
+    }
+}
+
+#[proc_macro_derive(RpcNamespace)]
+pub fn derive_namespace(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input);
+    let DeriveInput { ident, data, .. } = input;
+    match data {
+        Data::Enum(DataEnum { variants, .. }) => {
+            let mut from_str_body = quote! {};
+            let mut as_ref_body = quote! {};
+            let mut my_str_consts = quote! {};
+            for v in variants {
+                let id = v.ident;
+                let id_str = format!("{id}");
+                let const_id = format_ident!("{}", id_str.to_uppercase());
+                let const_val = id_str.to_lowercase();
+                my_str_consts = quote! {
+                    #my_str_consts
+                    const #const_id: &str = #const_val;
+                };
+                from_str_body = quote! {
+                    #from_str_body
+                    Self::#const_id => Some(Self::#id),
+                };
+                as_ref_body = quote! {
+                    #as_ref_body
+                    Self::#id => Self::#const_id,
+                };
+            }
+
+            let as_str = quote! {
+                fn as_str(&self)-> &str {
+                    match self {
+                        #as_ref_body
+                    }
+                }
+            };
+
+            let try_from = quote! {
+                fn try_from_str(str: &str) -> Option<Self> {
+                    match str {
+                        #from_str_body
+                        o => None,
+                    }
+                }
+            };
+
+            let output = quote! {
+                impl #ident {
+                    #my_str_consts
+                }
+                impl RpcNamespace for #ident {
+                    #as_str
+                    #try_from
+                }
+            };
+
             output.into()
         }
         _ => {

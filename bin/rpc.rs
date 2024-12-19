@@ -1,6 +1,6 @@
 use clap::{Parser, Subcommand};
-use llm_chain::node::rpc::RequestMethod;
-use llm_chain::util::json_rpc::socket;
+use llm_chain::node::rpc::RequestWrapper;
+use llm_chain::util::json_rpc::{socket, SocketRequestWrapper};
 use llm_chain::{telemetry::TRACING, MainResult};
 use std::sync::LazyLock;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, Interest};
@@ -22,12 +22,12 @@ enum Command {
     GetBal,
 }
 
-impl Into<RequestMethod> for Command {
-    fn into(self) -> RequestMethod {
+impl Into<RequestWrapper> for Command {
+    fn into(self) -> RequestWrapper {
         match self {
-            Self::PeerCount => RequestMethod::PeerCount(llm_chain::node::rpc::GetPeerCountRequest),
+            Self::PeerCount => RequestWrapper::PeerCount(llm_chain::node::rpc::GetPeerCountRequest),
             // obviously, this should be changed later
-            Self::GetBal => RequestMethod::GetBalance(llm_chain::node::rpc::GetBalanceRequest {
+            Self::GetBal => RequestWrapper::GetBalance(llm_chain::node::rpc::GetBalanceRequest {
                 address: "".to_string(),
             }),
         }
@@ -39,7 +39,7 @@ async fn main() -> MainResult<()> {
     LazyLock::force(&TRACING);
     let args = Args::parse();
     warn!("args: {args:#?}");
-    let req = Into::<RequestMethod>::into(args.command).into_socket_request(1, "2.0");
+    let req = Into::<RequestWrapper>::into(args.command).into_socket_request(1, "2.0");
     let bytes = serde_json::to_vec(&req).unwrap();
 
     let mut stream = TcpStream::connect(args.rpc_addr).await.unwrap();

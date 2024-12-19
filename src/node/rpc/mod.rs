@@ -3,19 +3,12 @@ use super::*;
 use crate::{
     blockchain::transaction::{mint::Mint, transfer::Transfer, UTXO},
     util::{
-        json_rpc::{RpcRequest, SocketRequestWrapper},
+        json_rpc::{RpcNamespace, RpcRequest, SocketRequestWrapper},
         map_vec::{Contains, MapVec},
         PublicKeyBytes,
     },
 };
-use ::macros::SocketRequestWrapper;
 pub use messages::*;
-
-#[derive(SocketRequestWrapper, Debug)]
-pub enum RequestWrapper {
-    PeerCount(GetPeerCountRequest),
-    GetBalance(GetBalanceRequest),
-}
 
 #[allow(private_interfaces)]
 impl<T> Node<T>
