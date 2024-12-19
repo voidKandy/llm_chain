@@ -1,7 +1,7 @@
 pub mod messages;
 use super::*;
 use crate::{
-    blockchain::transaction::{transfer::Transfer, UTXO},
+    blockchain::transaction::{mint::Mint, transfer::Transfer, UTXO},
     util::{
         json_rpc::{RpcRequest, TryFromSocketRequest},
         map_vec::{Contains, MapVec},
@@ -66,7 +66,7 @@ where
                 // should evevnutally use the given address, but for now will return local addr
                 if let Some(top_block) = self.blockchain.peek() {
                     let transfers: &MapVec<String, Transfer> = (*top_block).get_ref();
-                    let quantity = transfers.iter_vals().fold(0., |mut sum, t| {
+                    let mut quantity = transfers.iter_vals().fold(0., |mut sum, t| {
                         let utxos: &MapVec<String, UTXO> = t.get_ref();
                         for v in utxos.iter_vals() {
                             let key: &PublicKeyBytes = v.get_ref();
@@ -76,6 +76,12 @@ where
                         }
                         sum
                     });
+                    let mint: &Mint = (*top_block).get_ref();
+                    let utxos: &MapVec<PublicKeyBytes, UTXO> = mint.get_ref();
+                    quantity += utxos
+                        .get(&my_pub_key)
+                        .and_then(|out| Some(out.amount()))
+                        .unwrap_or(&0.0);
                     let response = GetBalanceResponse { quantity };
                     let json = serde_json::to_value(response)?;
                     return Ok(Ok(json));

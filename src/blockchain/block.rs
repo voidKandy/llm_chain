@@ -20,6 +20,12 @@ pub struct Block {
     signature: Vec<u8>,
 }
 
+impl Contains<Mint> for Block {
+    fn get_ref(&self) -> &Mint {
+        &self.mint
+    }
+}
+
 impl Contains<MapVec<String, Transfer>> for Block {
     fn get_ref(&self) -> &MapVec<String, Transfer> {
         &self.transfers
@@ -118,7 +124,7 @@ impl<'h> Hash<'h> for UnsignedBlock {
         hasher.update(fields.timestamp);
         hasher.update(fields.previous_hash);
         hasher.update(fields.nonce.to_string());
-        Self::update_multiple(&mut hasher, fields.transfers.as_ref());
+        Self::update_multiple(&mut hasher, fields.transfers.as_ref()).unwrap();
         hasher.update(fields.mint.hash_ref());
         hasher.finalize()
     }

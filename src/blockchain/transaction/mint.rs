@@ -1,4 +1,8 @@
-use crate::util::{hash::Hash, map_vec::MapVec, now_timestamp_string, PublicKeyBytes};
+use crate::util::{
+    hash::Hash,
+    map_vec::{Contains, MapVec},
+    now_timestamp_string, PublicKeyBytes,
+};
 use libp2p::identity::PublicKey;
 use serde::{Deserialize, Serialize};
 use sha3::Digest;
@@ -10,6 +14,12 @@ pub struct Mint {
     pub(super) hash: String,
     pub(super) timestamp: String,
     pub(super) outputs: MapVec<PublicKeyBytes, super::UTXO>,
+}
+
+impl Contains<MapVec<PublicKeyBytes, super::UTXO>> for Mint {
+    fn get_ref(&self) -> &MapVec<PublicKeyBytes, super::UTXO> {
+        &self.outputs
+    }
 }
 
 pub struct Fields<'h> {
