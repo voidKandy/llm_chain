@@ -1,8 +1,5 @@
-pub mod methods;
 pub mod socket;
-use ::macros::RpcRequest;
-use socket::Request;
-
+pub mod thread;
 use crate::MainResult;
 
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -30,6 +27,12 @@ impl<'a> TryFrom<&'a str> for Namespace {
             ))),
         }
     }
+}
+
+pub trait TryFromSocketRequest {
+    fn try_from_socket_req(req: socket::Request) -> MainResult<Self>
+    where
+        Self: Sized;
 }
 
 pub trait RpcResponse:

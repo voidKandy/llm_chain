@@ -56,21 +56,34 @@ const RES_SIZE: usize = std::mem::size_of::<Response>();
 
 pub async fn next_request(stream: &TcpStream) -> MainResult<Option<Request>> {
     let mut buffer = [0u8; REQ_SIZE];
-    let read_ready = stream.ready(Interest::READABLE).await?;
-    if read_ready.is_readable() {
-        let read_amt = stream.try_read(&mut buffer)?;
-        if read_amt == REQ_SIZE {
-            match serde_json::from_slice::<Request>(&buffer) {
+    let read_ready = stream.ready(Interest::READABLE).await.map_err(|err| {
+        tracing::error!("err waiting for stream ready: {err:#?}");
+        err
+    })?;
+
+    if !read_ready.is_readable() {
+        return Ok(None);
+    }
+    match stream.try_read(&mut buffer) {
+        Err(ref e) if e.kind() == tokio::io::ErrorKind::WouldBlock => Ok(None),
+        Ok(0) => Ok(None),
+        Ok(n) if n <= REQ_SIZE => {
+            // let  raw = String::from_utf8_lossy(&buffer[..n]);
+            // tracing::info!("Raw input (length={}): {:?}", raw.len(), raw);
+            //
+            match serde_json::from_slice::<Request>(&buffer[..n]) {
                 Ok(req) => {
                     return Ok(Some(req));
                 }
-                Err(err) => {
-                    tracing::warn!("error deserializing request: {err}");
-                }
+                Err(err) => Err(format!("error deserializing request: {err}").into()),
             }
         }
+        Ok(n) => {
+            tracing::warn!("read an unexpected number of bytes, expected: {REQ_SIZE} got: {n}");
+            Ok(None)
+        }
+        Err(e) => Err(e.into()),
     }
-    Ok(None)
 }
 
 pub async fn send_response(stream: &TcpStream, response: Response) -> MainResult<()> {

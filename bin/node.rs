@@ -7,6 +7,7 @@ use llm_chain::blockchain::chain::{
 use llm_chain::node::{client::ClientNode, validator::ValidatorNode, Node, NodeType};
 use llm_chain::telemetry::TRACING;
 use llm_chain::CHAIN_TOPIC;
+use std::net::IpAddr;
 use std::sync::LazyLock;
 use tracing::warn;
 
@@ -52,8 +53,9 @@ async fn create_boot_node() -> llm_chain::MainResult<Node<ValidatorNode>> {
 
     assert_eq!(peer_id.to_string().as_str(), BOOT_NODE_PEER_ID);
     warn!("id: {peer_id:#?}");
-
-    let mut server_node = Node::<ValidatorNode>::try_from_keys(keypair.clone()).unwrap();
+    let mut server_node = Node::<ValidatorNode>::try_from_keys(keypair.clone(), "127.0.0.1:0")
+        .await
+        .unwrap();
     let chain_topic = gossipsub::IdentTopic::new(CHAIN_TOPIC);
     server_node
         .swarm
@@ -73,7 +75,9 @@ async fn create_client_node_and_bootstrap() -> llm_chain::MainResult<Node<Client
     let keypair = Keypair::generate_ed25519();
     let peer_id = PeerId::from_public_key(&keypair.public());
     warn!("id: {peer_id:#?}");
-    let mut client_node = Node::<ClientNode>::try_from_keys(keypair).unwrap();
+    let mut client_node = Node::<ClientNode>::try_from_keys(keypair, "127.0.0.1:0")
+        .await
+        .unwrap();
 
     let chain_topic = gossipsub::IdentTopic::new(CHAIN_TOPIC);
     client_node

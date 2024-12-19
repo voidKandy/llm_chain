@@ -1,11 +1,17 @@
 pub mod behaviour;
 pub mod client;
 pub mod provider;
-mod user_input;
+mod rpc;
 pub mod validator;
 use crate::{
     blockchain::chain::Blockchain,
-    util::behaviour::{NetworkRequest, NetworkTopic},
+    util::{
+        behaviour::{NetworkRequest, NetworkTopic},
+        json_rpc::{
+            socket::{self, next_request},
+            thread::RpcListeningThread,
+        },
+    },
     MainResult,
 };
 use behaviour::{NodeBehaviourEvent, NodeNetworkBehaviour};
@@ -16,11 +22,11 @@ use libp2p::{
     swarm::{NetworkBehaviour, Swarm, SwarmEvent},
 };
 use std::time::Duration;
-use tokio::io::{AsyncBufReadExt, BufReader, Lines, Stdin};
+use tokio::net::ToSocketAddrs;
 
 pub struct Node<T: NodeType> {
     keys: Keypair,
-    stdin: Lines<BufReader<Stdin>>,
+    rpc_thread: RpcListeningThread,
     blockchain: Blockchain,
     pub swarm: Swarm<T::Behaviour>,
     pub inner: T,
@@ -33,7 +39,7 @@ where
     SwarmEvent<<<T as NodeType>::Behaviour as NetworkBehaviour>::ToSwarm>:
         Into<SwarmEvent<NodeBehaviourEvent>>,
 {
-    pub fn try_from_keys(keys: Keypair) -> MainResult<Self> {
+    pub async fn try_from_keys(keys: Keypair, addr: impl ToSocketAddrs) -> MainResult<Self> {
         let mut swarm = Self::swarm(keys.clone())?;
         let inner = T::init_with_swarm(&mut swarm)?;
         let blockchain = Blockchain::new();
@@ -42,7 +48,7 @@ where
             swarm,
             blockchain,
             keys,
-            stdin: tokio::io::BufReader::new(tokio::io::stdin()).lines(),
+            rpc_thread: RpcListeningThread::new(addr).await?,
         })
     }
 
@@ -55,13 +61,15 @@ where
                         self.handle_swarm_event(event).await?
                     }
                 }
-                Ok(Some(line)) = self.stdin.next_line() => {
-                    self.handle_user_input(line).await?;
+                Ok(Some(line)) = self.rpc_thread.try_recv() => {
+                    let response = self.handle_rpc_request(line).await?;
+                    self.rpc_thread.sender.send(response).await?;
                 },
                 Ok(Some(inner_event)) = self.inner.next_event() => {
                     tracing::warn!("inner event: {inner_event:#?}");
                     T::handle_self_event(self, inner_event).await?;
-                }
+                },
+
             }
         }
     }
