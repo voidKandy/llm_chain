@@ -6,9 +6,9 @@ pub mod validator;
 use crate::{
     blockchain::chain::Blockchain,
     util::{
-        behaviour::{NetworkRequest, NetworkTopic},
+        behaviour::NetworkTopic,
         json_rpc::{
-            socket::{self, next_request},
+            socket::{self},
             thread::RpcListeningThread,
         },
     },
@@ -61,8 +61,8 @@ where
                         self.handle_swarm_event(event).await?
                     }
                 }
-                Ok(Some(line)) = self.rpc_thread.try_recv() => {
-                    let response = self.handle_rpc_request(line).await?;
+                Ok(Some(req)) = self.rpc_thread.next_req() => {
+                    let response = self.handle_rpc_request(req).await?;
                     self.rpc_thread.sender.send(response).await?;
                 },
                 Ok(Some(inner_event)) = self.inner.next_event() => {

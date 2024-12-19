@@ -47,6 +47,7 @@ where
         &mut self,
         req_meth: RequestMethod,
     ) -> MainResult<Result<serde_json::Value, socket::Error>> {
+        tracing::warn!("processing: {req_meth:#?}");
         match req_meth {
             RequestMethod::PeerCount(_) => {
                 let count = T::Behaviour::shared(self.swarm.behaviour_mut())

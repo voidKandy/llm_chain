@@ -1,8 +1,9 @@
 use clap::{Parser, Subcommand};
 use llm_chain::node::rpc::RequestMethod;
+use llm_chain::util::json_rpc::socket;
 use llm_chain::{telemetry::TRACING, MainResult};
 use std::sync::LazyLock;
-use tokio::io::AsyncWriteExt;
+use tokio::io::{AsyncReadExt, AsyncWriteExt, Interest};
 use tokio::net::TcpStream;
 use tracing::warn;
 
@@ -37,6 +38,28 @@ async fn main() -> MainResult<()> {
     let bytes = serde_json::to_vec(&req).unwrap();
 
     let mut stream = TcpStream::connect(args.rpc_addr).await.unwrap();
-    stream.write_all(&bytes).await.unwrap();
+
+    let mut ready = stream
+        .ready(Interest::READABLE | Interest::WRITABLE)
+        .await
+        .unwrap();
+
+    if ready.is_writable() {
+        stream.write_all(&bytes).await.unwrap();
+        warn!("sent request: {req:#?}");
+
+        if !ready.is_readable() {
+            ready = stream.ready(Interest::READABLE).await.unwrap();
+        }
+
+        if ready.is_readable() {
+            let mut buf = [0u8; 1024];
+            let n = stream.read(&mut buf).await.unwrap();
+            let res: socket::Response = serde_json::from_slice(&buf[..n]).unwrap();
+
+            warn!("got response: {res:#?}")
+        }
+    }
+
     Ok(())
 }
