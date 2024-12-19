@@ -1,18 +1,26 @@
-use crate::util::json_rpc::{Namespace, RpcRequest, RpcResponse, TryFromSocketRequest};
-use ::macros::RpcRequest;
-use serde::{Deserialize, Serialize};
-
+pub mod messages;
 use super::*;
+use crate::{
+    blockchain::transaction::{transfer::Transfer, UTXO},
+    util::{
+        json_rpc::{RpcRequest, TryFromSocketRequest},
+        map_vec::{Contains, MapVec},
+        PublicKeyBytes,
+    },
+};
+pub use messages::*;
 
 #[derive(Debug)]
 pub enum RequestMethod {
     PeerCount(GetPeerCountRequest),
+    GetBalance(GetBalanceRequest),
 }
 
 impl RequestMethod {
     pub fn into_socket_request(self, id: u32, jsonrpc: &str) -> socket::Request {
         match self {
             Self::PeerCount(rq) => rq.into_socket_request(id, jsonrpc).unwrap(),
+            Self::GetBalance(rq) => rq.into_socket_request(id, jsonrpc).unwrap(),
         }
     }
 }
@@ -22,18 +30,12 @@ impl TryFromSocketRequest for RequestMethod {
         if let Some(req) = GetPeerCountRequest::try_from_request(&req)? {
             return Ok(Self::PeerCount(req));
         }
+        if let Some(req) = GetBalanceRequest::try_from_request(&req)? {
+            return Ok(Self::GetBalance(req));
+        }
         Err("Could not get request".into())
     }
 }
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GetPeerCountResponse {
-    count: u32,
-}
-
-#[derive(RpcRequest, Debug, Clone, Serialize, Deserialize)]
-#[rpc_request(namespace = "net")]
-pub struct GetPeerCountRequest;
 
 #[allow(private_interfaces)]
 impl<T> Node<T>
@@ -57,6 +59,28 @@ where
                 let response = GetPeerCountResponse { count };
                 let json = serde_json::to_value(response)?;
                 Ok(Ok(json))
+            }
+            RequestMethod::GetBalance(_get_bal) => {
+                let my_pub_key = PublicKeyBytes::from(self.keys.public());
+
+                // should evevnutally use the given address, but for now will return local addr
+                if let Some(top_block) = self.blockchain.peek() {
+                    let transfers: &MapVec<String, Transfer> = (*top_block).get_ref();
+                    let quantity = transfers.iter_vals().fold(0., |mut sum, t| {
+                        let utxos: &MapVec<String, UTXO> = t.get_ref();
+                        for v in utxos.iter_vals() {
+                            let key: &PublicKeyBytes = v.get_ref();
+                            if *key == my_pub_key {
+                                sum += v.amount();
+                            }
+                        }
+                        sum
+                    });
+                    let response = GetBalanceResponse { quantity };
+                    let json = serde_json::to_value(response)?;
+                    return Ok(Ok(json));
+                }
+                Ok(Err(socket::Error::new_empty("1", "Empty chain")))
             }
         }
     }

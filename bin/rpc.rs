@@ -19,12 +19,17 @@ struct Args {
 #[derive(Subcommand, Debug)]
 enum Command {
     PeerCount,
+    GetBal,
 }
 
 impl Into<RequestMethod> for Command {
     fn into(self) -> RequestMethod {
         match self {
             Self::PeerCount => RequestMethod::PeerCount(llm_chain::node::rpc::GetPeerCountRequest),
+            // obviously, this should be changed later
+            Self::GetBal => RequestMethod::GetBalance(llm_chain::node::rpc::GetBalanceRequest {
+                address: "".to_string(),
+            }),
         }
     }
 }

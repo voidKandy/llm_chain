@@ -4,7 +4,7 @@ pub mod provider;
 pub mod rpc;
 pub mod validator;
 use crate::{
-    blockchain::chain::Blockchain,
+    blockchain::chain::{init_blockchain, Blockchain},
     util::{
         behaviour::NetworkTopic,
         json_rpc::{
@@ -42,7 +42,7 @@ where
     pub async fn try_from_keys(keys: Keypair, addr: impl ToSocketAddrs) -> MainResult<Self> {
         let mut swarm = Self::swarm(keys.clone())?;
         let inner = T::init_with_swarm(&mut swarm)?;
-        let blockchain = Blockchain::new();
+        let blockchain = init_blockchain();
         Ok(Self {
             inner,
             swarm,

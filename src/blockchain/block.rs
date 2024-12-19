@@ -20,6 +20,12 @@ pub struct Block {
     signature: Vec<u8>,
 }
 
+impl Contains<MapVec<String, Transfer>> for Block {
+    fn get_ref(&self) -> &MapVec<String, Transfer> {
+        &self.transfers
+    }
+}
+
 impl Contains<String> for Block {
     fn get_ref(&self) -> &String {
         &self.hash

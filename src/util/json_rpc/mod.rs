@@ -1,3 +1,4 @@
+pub mod error;
 pub mod socket;
 pub mod thread;
 use crate::MainResult;

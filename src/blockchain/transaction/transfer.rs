@@ -17,6 +17,12 @@ pub struct Transfer {
     pub(super) signature: Option<Vec<u8>>,
 }
 
+impl Contains<MapVec<String, super::UTXO>> for Transfer {
+    fn get_ref(&self) -> &MapVec<String, super::UTXO> {
+        &self.outputs
+    }
+}
+
 impl Contains<String> for Transfer {
     fn get_ref(&self) -> &String {
         &self.hash

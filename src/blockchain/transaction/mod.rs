@@ -64,4 +64,8 @@ impl UTXO {
             receiver,
         }
     }
+
+    pub fn amount(&self) -> &f64 {
+        &self.amount
+    }
 }

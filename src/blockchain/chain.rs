@@ -12,6 +12,10 @@ const GENESIS_BLOCK: LazyLock<Block> = LazyLock::new(|| {
     block.sign(keys).expect("failed to sign block")
 });
 
+pub fn init_blockchain() -> Blockchain {
+    Blockchain::from(vec![LazyLock::force(&GENESIS_BLOCK).to_owned()])
+}
+
 /// boot node private key in boot.key, which was generated with
 /// ```shell
 /// head -c 32 /dev/urandom > boot.key

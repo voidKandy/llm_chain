@@ -1,4 +1,5 @@
 // https://www.jsonrpc.org/specification
+pub use super::error::Error;
 use serde::{Deserialize, Serialize};
 use tokio::{io::Interest, net::TcpStream};
 
@@ -34,20 +35,6 @@ pub struct Response {
     /// It MUST be the same as the value of the id member in the Request Object.
     /// If there was an error in detecting the id in the Request object (e.g. Parse error/Invalid Request), it MUST be Null.
     pub id: String,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
-pub struct Error {
-    /// A Number that indicates the error type that occurred.
-    /// This MUST be an integer.
-    pub code: String,
-    /// A String providing a short description of the error.
-    /// The message SHOULD be limited to a concise single sentence.
-    pub message: String,
-    /// A Primitive or Structured value that contains additional information about the error.
-    /// This may be omitted.
-    /// The value of this member is defined by the Server (e.g. detailed error information, nested errors etc.).
-    pub data: serde_json::Value,
 }
 
 type Listener = tokio::net::TcpListener;
