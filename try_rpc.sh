@@ -29,7 +29,7 @@ tmux send-keys -t $SESSION_NAME:$WINDOW_ID.1 "clear" C-m
 tmux send-keys -t $SESSION_NAME:$WINDOW_ID.2 C-c
 tmux send-keys -t $SESSION_NAME:$WINDOW_ID.2 "clear" C-m
 
-tmux send-keys -t $SESSION_NAME:$WINDOW_ID.1 "cargo run --bin node -- -a $ADDR boot | bunyan" C-m
+tmux send-keys -t $SESSION_NAME:$WINDOW_ID.1 "cargo run --bin server -- -b -a $ADDR miner | bunyan" C-m
 
 sleep 1.8
 
