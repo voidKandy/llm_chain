@@ -3,6 +3,9 @@ pub mod socket;
 pub mod thread;
 use crate::MainResult;
 
+/// as per the Json RPC 2.0 spec
+pub const JSONRPC_FIELD: &str = "2.0";
+
 pub trait RpcNamespace: PartialEq + Copy {
     fn as_str(&self) -> &str;
     fn try_from_str(str: &str) -> Option<Self>
@@ -11,10 +14,10 @@ pub trait RpcNamespace: PartialEq + Copy {
 }
 
 pub trait RpcRequestWrapper {
-    fn into_socket_request(self, id: u32, jsonrpc: &str) -> socket::Request
+    fn into_rpc_request(self, id: u32) -> socket::Request
     where
         Self: Sized;
-    fn try_from_socket_req(req: socket::Request) -> MainResult<Self>
+    fn try_from_rpc_req(req: socket::Request) -> MainResult<Self>
     where
         Self: Sized;
 }
@@ -31,11 +34,11 @@ pub trait RpcRequest:
     type Namespace: RpcNamespace;
     fn method() -> &'static str;
     fn namespace() -> Self::Namespace;
-    fn into_socket_request(&self, id: u32, jsonrpc: &str) -> MainResult<socket::Request> {
+    fn into_rpc_request(&self, id: u32) -> MainResult<socket::Request> {
         let params = serde_json::to_value(&self)?;
         let method = format!("{}_{}", Self::namespace().as_str(), Self::method());
         Ok(socket::Request {
-            jsonrpc: jsonrpc.to_string(),
+            jsonrpc: JSONRPC_FIELD.to_string(),
             method,
             params,
             id: format!("{id}"),

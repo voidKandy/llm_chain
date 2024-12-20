@@ -23,14 +23,18 @@ fi
 
 ADDR="127.0.0.1:3000";
 
-tmux send-keys -t $SESSION_NAME:$WINDOW_ID.1 C-c
-tmux send-keys -t $SESSION_NAME:$WINDOW_ID.1 "clear" C-m
 
 tmux send-keys -t $SESSION_NAME:$WINDOW_ID.2 C-c
-tmux send-keys -t $SESSION_NAME:$WINDOW_ID.2 "clear" C-m
+if lsof -iTCP -sTCP:LISTEN -n -P | grep -q "$ADDR"; then
+    echo "Server is already running on $ADDR"
+else
+    tmux send-keys -t $SESSION_NAME:$WINDOW_ID.1 C-c
+    tmux send-keys -t $SESSION_NAME:$WINDOW_ID.1 "clear" C-m
 
-tmux send-keys -t $SESSION_NAME:$WINDOW_ID.1 "cargo run --bin server -- -b -a $ADDR miner | bunyan" C-m
+    tmux send-keys -t $SESSION_NAME:$WINDOW_ID.2 "clear" C-m
+    tmux send-keys -t $SESSION_NAME:$WINDOW_ID.1 "cargo run --bin server -- -b -a $ADDR miner | bunyan" C-m
+    sleep 1.8
+fi
 
-sleep 1.8
 
 tmux send-keys -t $SESSION_NAME:$WINDOW_ID.2 "cargo run --bin rpc -- -a $ADDR $COMMAND | bunyan" C-m

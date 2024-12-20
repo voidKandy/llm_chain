@@ -116,8 +116,8 @@ pub fn derive_req_wrapper(input: TokenStream) -> TokenStream {
     let DeriveInput { ident, data, .. } = input;
     match data {
         Data::Enum(DataEnum { variants, .. }) => {
-            let mut into_socket_req_body = quote! {};
-            let mut from_socket_req_body = quote! {};
+            let mut into_rpc_req_body = quote! {};
+            let mut from_rpc_req_body = quote! {};
             for v in variants {
                 let id = v.ident;
                 let enum_typ = match v.fields {
@@ -130,38 +130,38 @@ pub fn derive_req_wrapper(input: TokenStream) -> TokenStream {
                     _ => panic!("only unnamed struct variants supported"),
                 };
                 let not_rpc_request = format!("variant {id} does not implement RpcRequest");
-                into_socket_req_body = quote! {
-                    #into_socket_req_body
-                    Self::#id(rq) => rq.into_socket_request(id, jsonrpc).expect(#not_rpc_request),
+                into_rpc_req_body = quote! {
+                    #into_rpc_req_body
+                    Self::#id(rq) => rq.into_rpc_request(id).expect(#not_rpc_request),
                 };
 
-                from_socket_req_body = quote! {
-                    #from_socket_req_body
+                from_rpc_req_body = quote! {
+                    #from_rpc_req_body
                     if let Some(req) = #enum_typ::try_from_request(&req)? {
                         return Ok(Self::#id(req));
                     }
                 };
             }
 
-            let into_socket_req = quote! {
-                fn into_socket_request(self, id: u32, jsonrpc: &str) -> socket::Request {
+            let into_rpc_req = quote! {
+                fn into_rpc_request(self, id: u32) -> rpc::Request {
                     match self {
-                        #into_socket_req_body
+                        #into_rpc_req_body
                     }
                 }
             };
 
-            let from_socket_req = quote! {
-                fn try_from_socket_req(req: socket::Request) -> MainResult<Self> {
-                    #from_socket_req_body
+            let from_rpc_req = quote! {
+                fn try_from_rpc_req(req: rpc::Request) -> MainResult<Self> {
+                    #from_rpc_req_body
                     Err("Could not get request".into())
                 }
             };
 
             let output = quote! {
                 impl RpcRequestWrapper for #ident {
-                    #into_socket_req
-                    #from_socket_req
+                    #into_rpc_req
+                    #from_rpc_req
 
                 }
             };
