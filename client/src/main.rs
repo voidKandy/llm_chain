@@ -1,17 +1,13 @@
 pub mod behaviour;
 pub mod node;
 
-use clap::{Parser, Subcommand};
+use clap::Parser;
 use libp2p::identity::Keypair;
-use libp2p::{gossipsub, Multiaddr, PeerId};
-use llm_chain::blockchain::chain::{
-    BOOT_NODE_KEYPAIR, BOOT_NODE_LISTEN_ADDR, BOOT_NODE_LOCAL_ADDR, BOOT_NODE_PEER_ID,
-};
-use llm_chain::node::{Node, NodeType};
+use libp2p::{Multiaddr, PeerId};
+use llm_chain::blockchain::chain::BOOT_NODE_LOCAL_ADDR;
+use llm_chain::node::Node;
 use llm_chain::telemetry::TRACING;
-use llm_chain::{MainResult, CHAIN_TOPIC};
 use node::ClientNode;
-use std::net::IpAddr;
 use std::sync::LazyLock;
 use tracing;
 
@@ -24,6 +20,8 @@ struct Args {
     key: Option<String>,
     #[arg(short = 'a')]
     rpc_addr: Option<String>,
+    #[arg(short = 'd')]
+    dial_addr: Option<String>,
 }
 
 #[tokio::main]
@@ -32,23 +30,33 @@ async fn main() -> llm_chain::MainResult<()> {
     let args = Args::parse();
     tracing::warn!("args: {args:#?}");
 
-    Ok(())
-}
-
-async fn create_client_node_and_bootstrap(addr: Option<String>) -> MainResult<Node<ClientNode>> {
-    let keypair = Keypair::generate_ed25519();
+    let keypair = match args.key {
+        Some(path) => {
+            let mut bytes = std::fs::read(path).unwrap();
+            Keypair::ed25519_from_bytes(&mut bytes)
+                .expect("failed to get keypair from boot.key bytes")
+        }
+        None => Keypair::generate_ed25519(),
+    };
     let peer_id = PeerId::from_public_key(&keypair.public());
     tracing::warn!("id: {peer_id:#?}");
-    let mut client_node = Node::try_from_keys(keypair, addr.unwrap_or("127.0.0.1:0".to_string()))
-        .await
-        .unwrap();
+    let mut node = Node::<ClientNode>::try_from_keys(
+        keypair,
+        args.rpc_addr.unwrap_or("127.0.0.1:0".to_string()),
+    )
+    .await
+    .unwrap();
 
-    let rendezvous_point_address = BOOT_NODE_LOCAL_ADDR.parse::<Multiaddr>().unwrap();
+    let boot_node_addr = args
+        .dial_addr
+        .unwrap_or(BOOT_NODE_LOCAL_ADDR.to_string())
+        .parse::<Multiaddr>()
+        .unwrap();
     let external_address = "/ip4/0.0.0.0/udp/0/quic-v1".parse::<Multiaddr>().unwrap();
 
-    client_node.swarm.add_external_address(external_address);
+    node.swarm.add_external_address(external_address);
 
-    client_node.swarm.dial(rendezvous_point_address).unwrap();
+    node.swarm.dial(boot_node_addr).unwrap();
 
-    Ok(client_node)
+    node.main_loop().await
 }

@@ -3,16 +3,10 @@ pub mod node;
 
 use clap::{Parser, Subcommand};
 use libp2p::identity::Keypair;
-use libp2p::{gossipsub, Multiaddr, PeerId};
-use llm_chain::blockchain::chain::{
-    BOOT_NODE_KEYPAIR, BOOT_NODE_LISTEN_ADDR, BOOT_NODE_LOCAL_ADDR, BOOT_NODE_PEER_ID,
-};
-use llm_chain::node::{Node, NodeType};
+use llm_chain::blockchain::chain::{BOOT_NODE_KEYPAIR, BOOT_NODE_LISTEN_ADDR};
+use llm_chain::node::Node;
 use llm_chain::telemetry::TRACING;
-use llm_chain::util::behaviour::NetworkTopic;
-use llm_chain::CHAIN_TOPIC;
-use node::MinerNode;
-use std::net::IpAddr;
+use node::{MinerNode, ProviderNode};
 use std::sync::LazyLock;
 use tracing::warn;
 
@@ -25,6 +19,10 @@ struct Args {
     command: Command,
     #[arg(short = 'b')]
     boot: bool,
+    #[arg(short = 'k')]
+    key: Option<String>,
+    #[arg(short = 'n')]
+    net_addr: Option<String>,
     #[arg(short = 'a')]
     rpc_addr: Option<String>,
 }
@@ -40,46 +38,71 @@ async fn main() -> llm_chain::MainResult<()> {
     LazyLock::force(&TRACING);
     let args = Args::parse();
     warn!("args: {args:#?}");
+    let keypair = match (args.boot, args.key) {
+        (true, opt) => {
+            if opt.is_some() {
+                warn!("passing a key for a boot node is redundant, the key will not be used");
+            }
+            let b = BOOT_NODE_KEYPAIR;
+            LazyLock::force(&b).to_owned()
+        }
+        (false, Some(key_path)) => {
+            warn!("getting key from {key_path}");
+            let mut bytes = std::fs::read(key_path).unwrap();
+            Keypair::ed25519_from_bytes(&mut bytes)
+                .expect("failed to get keypair from boot.key bytes")
+        }
+        _ => Keypair::generate_ed25519(),
+    };
 
     match args.command {
         Command::Miner => {
-            // let mut node = create_client_node_and_bootstrap(args.rpc_addr).await?;
-            // node.main_loop().await
+            let mut node = Node::<MinerNode>::try_from_keys(
+                keypair.clone(),
+                args.rpc_addr.unwrap_or("127.0.0.1:0".to_string()),
+            )
+            .await
+            .unwrap();
+
+            if args.boot {
+                node.swarm
+                    .listen_on(BOOT_NODE_LISTEN_ADDR.parse().unwrap())
+                    .unwrap();
+            } else {
+                node.swarm
+                    .listen_on(
+                        args.net_addr
+                            .unwrap_or("0.0.0.0:0".to_string())
+                            .parse()
+                            .unwrap(),
+                    )
+                    .unwrap();
+            }
+            node.main_loop().await
         }
 
         Command::Provider => {
-            // let mut node = create_boot_node(args.rpc_addr).await?;
-            // warn!("created node");
-            // node.main_loop().await
+            let mut node = Node::<ProviderNode>::try_from_keys(
+                keypair.clone(),
+                args.rpc_addr.unwrap_or("127.0.0.1:0".to_string()),
+            )
+            .await
+            .unwrap();
+            if args.boot {
+                node.swarm
+                    .listen_on(BOOT_NODE_LISTEN_ADDR.parse().unwrap())
+                    .unwrap();
+            } else {
+                node.swarm
+                    .listen_on(
+                        args.net_addr
+                            .unwrap_or("0.0.0.0:0".to_string())
+                            .parse()
+                            .unwrap(),
+                    )
+                    .unwrap();
+            }
+            node.main_loop().await
         }
     }
-
-    Ok(())
-}
-
-async fn create_boot_node(addr: Option<String>) -> llm_chain::MainResult<Node<MinerNode>> {
-    let b = BOOT_NODE_KEYPAIR;
-    let keypair = LazyLock::force(&b);
-    let peer_id = PeerId::from_public_key(&keypair.public());
-
-    assert_eq!(peer_id.to_string().as_str(), BOOT_NODE_PEER_ID);
-    tracing::warn!("id: {peer_id:#?}");
-    let mut server_node = Node::<MinerNode>::try_from_keys(
-        keypair.clone(),
-        addr.unwrap_or("127.0.0.1:0".to_string()),
-    )
-    .await
-    .unwrap();
-    server_node
-        .swarm
-        .behaviour_mut()
-        .shared
-        .gossip
-        .subscribe(&NetworkTopic::ChainUpdate.subscribe())?;
-
-    server_node
-        .swarm
-        .listen_on(BOOT_NODE_LISTEN_ADDR.parse()?)?;
-
-    Ok(server_node)
 }

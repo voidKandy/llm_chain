@@ -1,8 +1,5 @@
 pub mod behaviour;
-// pub mod client;
-// pub mod provider;
 pub mod rpc;
-// pub mod validator;
 use crate::{
     blockchain::chain::{init_blockchain, Blockchain},
     util::{
@@ -30,9 +27,6 @@ pub struct Node<T: NodeType> {
     blockchain: Blockchain,
     pub swarm: Swarm<T::Behaviour>,
     pub inner: T,
-    #[doc(hidden)]
-    /// https://xaeroxe.github.io/init-struct-pattern/
-    pub __non_exhaustive: (),
 }
 
 impl<T> Node<T>
@@ -52,7 +46,6 @@ where
             blockchain,
             keys,
             rpc_thread: RpcListeningThread::new(addr).await?,
-            __non_exhaustive: {},
         })
     }
 
