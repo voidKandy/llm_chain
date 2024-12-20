@@ -73,7 +73,7 @@ where
     ) -> MainResult<socket::Response> {
         let rpc_version = req.jsonrpc.clone();
         let req_id = req.id.clone();
-        let method = RequestWrapper::try_from_socket_req(req)?;
+        let method = RequestWrapper::try_from_rpc_req(req)?;
         let response = match self.process_request_method(method).await? {
             Ok(json) => socket::Response {
                 jsonrpc: rpc_version,

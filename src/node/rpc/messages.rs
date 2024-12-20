@@ -2,9 +2,9 @@ use crate::{
     util::json_rpc::{socket, RpcNamespace, RpcRequest, RpcRequestWrapper, RpcResponse},
     MainResult,
 };
-use ::macros::RpcNamespace;
-use ::macros::RpcRequest;
-use ::macros::RpcRequestWrapper;
+use macros::RpcNamespace;
+use macros::RpcRequest;
+use macros::RpcRequestWrapper;
 use serde::{Deserialize, Serialize};
 
 #[derive(RpcNamespace, Debug, Copy, Clone, PartialEq)]

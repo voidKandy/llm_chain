@@ -144,7 +144,7 @@ pub fn derive_req_wrapper(input: TokenStream) -> TokenStream {
             }
 
             let into_rpc_req = quote! {
-                fn into_rpc_request(self, id: u32) -> rpc::Request {
+                fn into_rpc_request(self, id: u32) -> socket::Request {
                     match self {
                         #into_rpc_req_body
                     }
@@ -152,7 +152,7 @@ pub fn derive_req_wrapper(input: TokenStream) -> TokenStream {
             };
 
             let from_rpc_req = quote! {
-                fn try_from_rpc_req(req: rpc::Request) -> MainResult<Self> {
+                fn try_from_rpc_req(req: socket::Request) -> MainResult<Self> {
                     #from_rpc_req_body
                     Err("Could not get request".into())
                 }
