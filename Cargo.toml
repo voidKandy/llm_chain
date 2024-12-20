@@ -7,19 +7,24 @@ edition = "2021"
 path="src/lib.rs"
 
 [[bin]]
-name="node"
-path="bin/node.rs"
+name="client"
+path="client/src/main.rs"
+
+[[bin]]
+name="server"
+path="server/src/main.rs"
 
 [[bin]]
 name="rpc"
 path="bin/rpc.rs"
 
+
 [workspace]
-members = ["macros",  "server", "client"]
+members = ["macros",   "server", "client"]
 
 [dependencies]
+macros = { workspace = true }
 futures ={ workspace = true}
-macros ={workspace = true}
 chrono ={workspace = true}
 sha3 ={workspace = true}
 clap ={workspace = true}
@@ -36,8 +41,10 @@ thiserror ={workspace = true}
 
 
 [workspace.dependencies]
+macros = { path ="./macros"}
+client = { path ="./client"}
+server = { path ="./server"}
 futures = "0.3.31"
-macros = {path ="./macros"}
 chrono = "0.4.38"
 sha3 = "0.10.8"
 clap =  { version = "4.5.21", features = ["derive", "env"] }

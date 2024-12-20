@@ -25,7 +25,7 @@ pub fn derive_rpc_req(input: TokenStream) -> TokenStream {
             let name_no_suffix = name
                 .strip_suffix("Request")
                 .expect("make sure to put 'Request' at the end of your struct name");
-            let struct_name = format_ident!("{}", name_no_suffix);
+            // let struct_name = format_ident!("{}", name_no_suffix);
             let response_struct_name = match opts.response {
                 Some(res) => format_ident!("{}", res),
                 None => format_ident!("{}Response", name_no_suffix),

@@ -3,10 +3,6 @@ name = "client"
 version = "0.1.0"
 edition = "2021"
 
-[[bin]]
-name = "patron"
-path = "bin/patron.rs"
-
 [dependencies]
 llm_chain = {path ="../"}
 libp2p ={workspace = true}
