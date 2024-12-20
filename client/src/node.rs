@@ -1,14 +1,25 @@
-use super::*;
-use crate::{
-    util::{behaviour::ProvisionBid, heap::max::MaxHeap},
+use std::time::Duration;
+
+use libp2p::{
+    gossipsub,
+    swarm::{NetworkBehaviour, SwarmEvent},
+    PeerId, Swarm,
+};
+use llm_chain::{
+    node::{
+        behaviour::{NodeBehaviourEvent, SharedBehaviour},
+        Node, NodeType, NodeTypeEvent,
+    },
+    util::{
+        behaviour::{NetworkTopic, ProvisionBid},
+        heap::max::MaxHeap,
+    },
     MainResult,
 };
-use behaviour::{ClientNodeBehaviour, NodeBehaviourEvent};
-use libp2p::{gossipsub, PeerId};
 use serde_json::json;
-use tokio::io::{AsyncBufReadExt, BufReader, Lines, Stdin};
 
-const AUCTIONING_DURATION: Duration = Duration::from_millis(100);
+use crate::behaviour::ClientNodeBehaviour;
+
 pub struct ClientNode {
     state: ClientNodeState,
 }
@@ -30,16 +41,17 @@ pub enum ClientNodeState {
         messages: Vec<(usize, String)>,
     },
 }
+const AUCTIONING_DURATION: Duration = Duration::from_millis(100);
 
-impl Node<ClientNode> {
-    fn start_auction(&mut self) -> MainResult<()> {
+impl ClientNode {
+    fn start_auction(node: &mut Node<Self>) -> MainResult<()> {
         // definately should be a struct later, but for now this is fine
         let data = json!({
         // amt of input tokens
         "input_length": 50
         });
 
-        self.swarm
+        node.swarm
             .behaviour_mut()
             .shared
             .gossip
@@ -48,7 +60,7 @@ impl Node<ClientNode> {
                 serde_json::to_vec(&data).unwrap(),
             )
             .expect("failed to publish auction start");
-        self.inner.state = ClientNodeState::Auctioning {
+        node.inner.state = ClientNodeState::Auctioning {
             start: std::time::Instant::now(),
             bids: vec![].into(),
         };
@@ -57,13 +69,14 @@ impl Node<ClientNode> {
 }
 
 #[derive(Debug)]
+// MACRO COULD BE HERE
 pub enum ClientNodeEvent {
     UserInput(String),
     ChoseBid(ProvisionBid),
     GotCompletion { provider: PeerId, content: String },
 }
-
 impl NodeTypeEvent for ClientNodeEvent {}
+
 impl NodeType for ClientNode {
     type Behaviour = ClientNodeBehaviour;
     type Event = ClientNodeEvent;

@@ -1,0 +1,21 @@
+[package]
+name = "server"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "miner"
+path = "bin/miner.rs"
+[[bin]]
+name = "provider"
+path = "bin/provider.rs"
+
+
+[dependencies]
+llm_chain = {path ="../"}
+libp2p ={workspace = true}
+serde_json={workspace=true}
+tokio ={workspace = true}
+tracing ={workspace = true}
+clap ={workspace = true}
+

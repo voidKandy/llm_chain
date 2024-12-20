@@ -110,7 +110,7 @@ pub fn derive_rpc_req(input: TokenStream) -> TokenStream {
     }
 }
 
-#[proc_macro_derive(SocketRequestWrapper)]
+#[proc_macro_derive(RpcRequestWrapper)]
 pub fn derive_req_wrapper(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input);
     let DeriveInput { ident, data, .. } = input;
@@ -159,7 +159,7 @@ pub fn derive_req_wrapper(input: TokenStream) -> TokenStream {
             };
 
             let output = quote! {
-                impl SocketRequestWrapper for #ident {
+                impl RpcRequestWrapper for #ident {
                     #into_socket_req
                     #from_socket_req
 

@@ -10,7 +10,7 @@ pub trait RpcNamespace: PartialEq + Copy {
         Self: Sized;
 }
 
-pub trait SocketRequestWrapper {
+pub trait RpcRequestWrapper {
     fn into_socket_request(self, id: u32, jsonrpc: &str) -> socket::Request
     where
         Self: Sized;

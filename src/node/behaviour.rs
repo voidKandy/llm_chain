@@ -20,8 +20,53 @@ pub struct SharedBehaviour {
     pub req_res: NetworkReqRes,
 }
 
+#[derive(Debug)]
+pub enum NodeBehaviourEvent {
+    Identify(identify::Event),
+    Gossip(gossipsub::Event),
+    ReqRes(request_response::Event<NetworkRequest, NetworkResponse>),
+    RendezvousServer(rendezvous::server::Event),
+    RendezvousClient(rendezvous::client::Event),
+}
+
+impl From<SharedBehaviourEvent> for NodeBehaviourEvent {
+    fn from(value: SharedBehaviourEvent) -> Self {
+        match value {
+            SharedBehaviourEvent::Gossip(e) => Self::from(e),
+            SharedBehaviourEvent::Identify(e) => Self::from(e),
+            SharedBehaviourEvent::ReqRes(e) => Self::from(e),
+        }
+    }
+}
+
+impl From<identify::Event> for NodeBehaviourEvent {
+    fn from(value: identify::Event) -> Self {
+        Self::Identify(value)
+    }
+}
+impl From<request_response::Event<NetworkRequest, NetworkResponse>> for NodeBehaviourEvent {
+    fn from(value: request_response::Event<NetworkRequest, NetworkResponse>) -> Self {
+        Self::ReqRes(value)
+    }
+}
+impl From<gossipsub::Event> for NodeBehaviourEvent {
+    fn from(value: gossipsub::Event) -> Self {
+        Self::Gossip(value)
+    }
+}
+impl From<rendezvous::client::Event> for NodeBehaviourEvent {
+    fn from(value: rendezvous::client::Event) -> Self {
+        Self::RendezvousClient(value)
+    }
+}
+impl From<rendezvous::server::Event> for NodeBehaviourEvent {
+    fn from(value: rendezvous::server::Event) -> Self {
+        Self::RendezvousServer(value)
+    }
+}
+
 impl SharedBehaviour {
-    fn new(keys: Keypair) -> Self {
+    pub fn new(keys: Keypair) -> Self {
         let message_id_fn = |message: &gossipsub::Message| {
             let mut s = DefaultHasher::new();
             message.data.hash(&mut s);
@@ -57,97 +102,10 @@ impl SharedBehaviour {
 }
 
 /// Any behaviour that a node can possibly have must implement this
-pub trait NodeNetworkBehaviour: NetworkBehaviour {
-    fn shared(&mut self) -> &mut SharedBehaviour;
+pub trait NodeNetworkBehaviour:
+    AsRef<SharedBehaviour> + AsMut<SharedBehaviour> + NetworkBehaviour
+{
     fn new(keys: Keypair) -> Self
     where
         Self: Sized;
-}
-
-#[derive(NetworkBehaviour)]
-#[behaviour(to_swarm = "NodeBehaviourEvent")]
-pub struct ServerNodeBehaviour {
-    pub shared: SharedBehaviour,
-    pub rendezvous: rendezvous::server::Behaviour,
-}
-impl NodeNetworkBehaviour for ServerNodeBehaviour {
-    fn shared(&mut self) -> &mut SharedBehaviour {
-        &mut self.shared
-    }
-    fn new(keys: Keypair) -> Self
-    where
-        Self: Sized,
-    {
-        let shared = SharedBehaviour::new(keys);
-        Self {
-            shared,
-            rendezvous: rendezvous::server::Behaviour::new(rendezvous::server::Config::default()),
-        }
-    }
-}
-
-#[derive(NetworkBehaviour)]
-#[behaviour(to_swarm = "NodeBehaviourEvent")]
-pub struct ClientNodeBehaviour {
-    pub shared: SharedBehaviour,
-    pub rendezvous: rendezvous::client::Behaviour,
-}
-impl NodeNetworkBehaviour for ClientNodeBehaviour {
-    fn shared(&mut self) -> &mut SharedBehaviour {
-        &mut self.shared
-    }
-    fn new(keys: Keypair) -> Self
-    where
-        Self: Sized,
-    {
-        let shared = SharedBehaviour::new(keys.clone());
-        Self {
-            shared,
-            rendezvous: rendezvous::client::Behaviour::new(keys.clone()),
-        }
-    }
-}
-
-#[derive(Debug)]
-pub enum NodeBehaviourEvent {
-    Identify(identify::Event),
-    Gossip(gossipsub::Event),
-    ReqRes(request_response::Event<NetworkRequest, NetworkResponse>),
-    RendezvousServer(rendezvous::server::Event),
-    RendezvousClient(rendezvous::client::Event),
-}
-
-impl From<SharedBehaviourEvent> for NodeBehaviourEvent {
-    fn from(value: SharedBehaviourEvent) -> Self {
-        match value {
-            SharedBehaviourEvent::Gossip(e) => Self::from(e),
-            SharedBehaviourEvent::Identify(e) => Self::from(e),
-            SharedBehaviourEvent::ReqRes(e) => Self::from(e),
-        }
-    }
-}
-impl From<identify::Event> for NodeBehaviourEvent {
-    fn from(value: identify::Event) -> Self {
-        Self::Identify(value)
-    }
-}
-impl From<request_response::Event<NetworkRequest, NetworkResponse>> for NodeBehaviourEvent {
-    fn from(value: request_response::Event<NetworkRequest, NetworkResponse>) -> Self {
-        Self::ReqRes(value)
-    }
-}
-impl From<gossipsub::Event> for NodeBehaviourEvent {
-    fn from(value: gossipsub::Event) -> Self {
-        Self::Gossip(value)
-    }
-}
-impl From<rendezvous::client::Event> for NodeBehaviourEvent {
-    fn from(value: rendezvous::client::Event) -> Self {
-        Self::RendezvousClient(value)
-    }
-}
-impl From<rendezvous::server::Event> for NodeBehaviourEvent {
-    fn from(value: rendezvous::server::Event) -> Self {
-        Self::RendezvousServer(value)
-    }
 }

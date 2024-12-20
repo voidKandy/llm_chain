@@ -15,9 +15,27 @@ name="rpc"
 path="bin/rpc.rs"
 
 [workspace]
-members = ["macros",]
+members = ["macros",  "server", "client"]
 
 [dependencies]
+futures ={ workspace = true}
+macros ={workspace = true}
+chrono ={workspace = true}
+sha3 ={workspace = true}
+clap ={workspace = true}
+libp2p ={workspace = true}
+serde ={workspace = true}
+tokio ={workspace = true}
+tracing ={workspace = true}
+tracing-log ={workspace = true}
+tracing-bunyan-formatter ={workspace = true}
+tracing-subscriber ={workspace = true}
+serde_json ={workspace = true}
+thiserror ={workspace = true}
+
+
+
+[workspace.dependencies]
 futures = "0.3.31"
 macros = {path ="./macros"}
 chrono = "0.4.38"

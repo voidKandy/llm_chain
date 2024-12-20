@@ -1,8 +1,8 @@
 pub mod behaviour;
-pub mod client;
-pub mod provider;
+// pub mod client;
+// pub mod provider;
 pub mod rpc;
-pub mod validator;
+// pub mod validator;
 use crate::{
     blockchain::chain::{init_blockchain, Blockchain},
     util::{
@@ -14,7 +14,7 @@ use crate::{
     },
     MainResult,
 };
-use behaviour::{NodeBehaviourEvent, NodeNetworkBehaviour};
+use behaviour::{NodeBehaviourEvent, NodeNetworkBehaviour, SharedBehaviour};
 use futures::StreamExt;
 use libp2p::{
     gossipsub,
@@ -30,6 +30,9 @@ pub struct Node<T: NodeType> {
     blockchain: Blockchain,
     pub swarm: Swarm<T::Behaviour>,
     pub inner: T,
+    #[doc(hidden)]
+    /// https://xaeroxe.github.io/init-struct-pattern/
+    pub __non_exhaustive: (),
 }
 
 impl<T> Node<T>
@@ -49,6 +52,7 @@ where
             blockchain,
             keys,
             rpc_thread: RpcListeningThread::new(addr).await?,
+            __non_exhaustive: {},
         })
     }
 
@@ -86,7 +90,9 @@ where
             )) if peer_id != *self.swarm.local_peer_id()
                 && topic == NetworkTopic::ChainUpdate.publish() =>
             {
-                T::Behaviour::shared(self.swarm.behaviour_mut())
+                self.swarm
+                    .behaviour_mut()
+                    .as_mut()
                     .gossip
                     .publish(topic, serde_json::to_vec(&self.blockchain)?)?;
             }
@@ -124,7 +130,7 @@ where
     }
 
     fn swarm(keys: Keypair) -> MainResult<Swarm<T::Behaviour>> {
-        Ok(libp2p::SwarmBuilder::with_existing_identity(keys)
+        let mut swarm = libp2p::SwarmBuilder::with_existing_identity(keys)
             .with_tokio()
             .with_quic()
             .with_dns()?
@@ -132,7 +138,13 @@ where
             .with_swarm_config(|cfg| {
                 cfg.with_idle_connection_timeout(Duration::from_secs(u64::MAX))
             })
-            .build())
+            .build();
+        swarm
+            .behaviour_mut()
+            .as_mut()
+            .gossip
+            .subscribe(&NetworkTopic::ChainUpdate.subscribe())?;
+        Ok(swarm)
     }
 }
 

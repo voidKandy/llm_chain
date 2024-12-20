@@ -1,11 +1,10 @@
 use crate::{
-    util::json_rpc::{socket, RpcNamespace, RpcRequest, RpcResponse, SocketRequestWrapper},
+    util::json_rpc::{socket, RpcNamespace, RpcRequest, RpcRequestWrapper, RpcResponse},
     MainResult,
 };
-
 use ::macros::RpcNamespace;
 use ::macros::RpcRequest;
-use ::macros::SocketRequestWrapper;
+use ::macros::RpcRequestWrapper;
 use serde::{Deserialize, Serialize};
 
 #[derive(RpcNamespace, Debug, Copy, Clone, PartialEq)]
@@ -15,7 +14,7 @@ pub enum Namespace {
     Client,
 }
 
-#[derive(SocketRequestWrapper, Debug)]
+#[derive(RpcRequestWrapper, Debug)]
 pub enum RequestWrapper {
     PeerCount(GetPeerCountRequest),
     GetBalance(GetBalanceRequest),

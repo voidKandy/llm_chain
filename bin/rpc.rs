@@ -1,6 +1,6 @@
 use clap::{Parser, Subcommand};
 use llm_chain::node::rpc::RequestWrapper;
-use llm_chain::util::json_rpc::{socket, SocketRequestWrapper};
+use llm_chain::util::json_rpc::{socket, RpcRequestWrapper};
 use llm_chain::{telemetry::TRACING, MainResult};
 use std::sync::LazyLock;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, Interest};

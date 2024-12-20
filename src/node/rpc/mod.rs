@@ -3,7 +3,7 @@ use super::*;
 use crate::{
     blockchain::transaction::{mint::Mint, transfer::Transfer, UTXO},
     util::{
-        json_rpc::{RpcNamespace, RpcRequest, SocketRequestWrapper},
+        json_rpc::RpcRequestWrapper,
         map_vec::{Contains, MapVec},
         PublicKeyBytes,
     },
@@ -25,7 +25,10 @@ where
         tracing::warn!("processing: {req:#?}");
         match req {
             RequestWrapper::PeerCount(_) => {
-                let count = T::Behaviour::shared(self.swarm.behaviour_mut())
+                let count = self
+                    .swarm
+                    .behaviour_mut()
+                    .as_mut()
                     .gossip
                     .all_peers()
                     .count() as u32;
