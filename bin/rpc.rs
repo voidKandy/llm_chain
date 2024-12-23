@@ -2,7 +2,6 @@ use clap::{Parser, Subcommand};
 use llm_chain::node::rpc::RequestWrapper;
 use llm_chain::util::json_rpc::{socket, RpcRequestWrapper};
 use llm_chain::{telemetry::TRACING, MainResult};
-use rand::Rng;
 use std::sync::LazyLock;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, Interest};
 use tokio::net::TcpStream;
@@ -40,37 +39,50 @@ async fn main() -> MainResult<()> {
     LazyLock::force(&TRACING);
     let args = Args::parse();
     warn!("args: {args:#?}");
+    let stdin = std::io::stdin();
+    let mut buf = String::new();
+    let mut id = 1;
 
-    let mut rng = rand::thread_rng();
-    // for now req will have random ids
-    let id: u32 = rng.gen();
-
-    let req = Into::<RequestWrapper>::into(args.command).into_rpc_request(id);
-    let bytes = serde_json::to_vec(&req).unwrap();
+    let mut req = Into::<RequestWrapper>::into(args.command).into_rpc_request(id);
 
     let mut stream = TcpStream::connect(args.rpc_addr).await.unwrap();
 
-    let mut ready = stream
-        .ready(Interest::READABLE | Interest::WRITABLE)
-        .await
-        .unwrap();
+    loop {
+        let bytes = serde_json::to_vec(&req).unwrap();
+        let mut ready = stream
+            .ready(Interest::READABLE | Interest::WRITABLE)
+            .await
+            .unwrap();
 
-    if ready.is_writable() {
-        stream.write_all(&bytes).await.unwrap();
-        warn!("sent request: {req:#?}");
+        if ready.is_writable() {
+            stream.write_all(&bytes).await.unwrap();
+            warn!("sent request: {req:#?}");
 
-        if !ready.is_readable() {
-            ready = stream.ready(Interest::READABLE).await.unwrap();
+            if !ready.is_readable() {
+                ready = stream.ready(Interest::READABLE).await.unwrap();
+            }
+
+            if ready.is_readable() {
+                let mut buf = [0u8; 1024];
+                let n = stream.read(&mut buf).await.unwrap();
+                let res: socket::Response = serde_json::from_slice(&buf[..n]).unwrap();
+
+                warn!("got response: {res:#?}")
+            }
         }
 
-        if ready.is_readable() {
-            let mut buf = [0u8; 1024];
-            let n = stream.read(&mut buf).await.unwrap();
-            let res: socket::Response = serde_json::from_slice(&buf[..n]).unwrap();
-
-            warn!("got response: {res:#?}")
-        }
+        println!("accepting input: \npeer-count | get-bal | exit");
+        stdin.read_line(&mut buf)?;
+        let command = match buf.drain(..).collect::<String>().trim() {
+            "peer-count" => Command::PeerCount,
+            "get-bal" => Command::GetBal,
+            "exit" => panic!("exit"),
+            _ => {
+                tracing::warn!("{buf} is not a valid input");
+                continue;
+            }
+        };
+        id += 1;
+        req = Into::<RequestWrapper>::into(command).into_rpc_request(id);
     }
-
-    Ok(())
 }
