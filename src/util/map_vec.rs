@@ -8,11 +8,60 @@ pub trait Contains<T> {
     fn get_ref(&self) -> &T;
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct MapVec<K: hash::Hash + Eq, T> {
     data: Vec<T>,
     map: HashMap<K, usize>,
     last_inserted: Option<K>,
+}
+
+impl<K, T> serde::Serialize for MapVec<K, T>
+where
+    T: ?Sized
+        + fmt::Debug
+        + Clone
+        + Serialize
+        + for<'de> Deserialize<'de>
+        + PartialEq
+        + Contains<K>,
+    K: fmt::Debug
+        + Clone
+        + Serialize
+        + for<'de> Deserialize<'de>
+        + PartialEq
+        + hash::Hash
+        + Eq
+        + Sized,
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let arr: &[T] = self.as_ref();
+        let vec: Vec<T> = arr.to_vec();
+        <Vec<T> as Serialize>::serialize(&vec, serializer)
+    }
+}
+
+impl<'de, K, T> serde::Deserialize<'de> for MapVec<K, T>
+where
+    T: ?Sized + fmt::Debug + Clone + Serialize + for<'a> Deserialize<'a> + PartialEq + Contains<K>,
+    K: fmt::Debug
+        + Clone
+        + Serialize
+        + for<'a> Deserialize<'a>
+        + PartialEq
+        + hash::Hash
+        + Eq
+        + Sized,
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let vec: Vec<T> = <Vec<T> as Deserialize>::deserialize(deserializer)?;
+        Ok(MapVec::from(vec))
+    }
 }
 
 impl<K, T> AsRef<[T]> for MapVec<K, T>

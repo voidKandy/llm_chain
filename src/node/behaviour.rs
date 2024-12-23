@@ -9,7 +9,10 @@ use libp2p::{
 };
 use std::hash::{DefaultHasher, Hash, Hasher};
 
-use crate::util::behaviour::{NetworkReqRes, NetworkRequest, NetworkResponse, IDENTIFY_ID};
+use crate::util::behaviour::{
+    req_res::{NetworkReqRes, NetworkRequest, NetworkResponse},
+    IDENTIFY_ID,
+};
 
 /// Behaviour that is shared between server/client
 /// Should never be manually instantiated
@@ -18,6 +21,7 @@ pub struct SharedBehaviour {
     pub gossip: gossipsub::Behaviour,
     pub identify: identify::Behaviour,
     pub req_res: NetworkReqRes,
+    pub stream: libp2p_stream::Behaviour,
 }
 
 #[derive(Debug)]
@@ -27,6 +31,8 @@ pub enum NodeBehaviourEvent {
     ReqRes(request_response::Event<NetworkRequest, NetworkResponse>),
     RendezvousServer(rendezvous::server::Event),
     RendezvousClient(rendezvous::client::Event),
+    /// Stream event emits ()
+    Stream(()),
 }
 
 impl From<SharedBehaviourEvent> for NodeBehaviourEvent {
@@ -35,6 +41,7 @@ impl From<SharedBehaviourEvent> for NodeBehaviourEvent {
             SharedBehaviourEvent::Gossip(e) => Self::from(e),
             SharedBehaviourEvent::Identify(e) => Self::from(e),
             SharedBehaviourEvent::ReqRes(e) => Self::from(e),
+            SharedBehaviourEvent::Stream(e) => Self::Stream(e),
         }
     }
 }
@@ -93,10 +100,13 @@ impl SharedBehaviour {
                 )],
                 libp2p::request_response::Config::default(),
             );
+
+        let stream = libp2p_stream::Behaviour::new();
         Self {
             gossip,
             identify,
             req_res,
+            stream,
         }
     }
 }

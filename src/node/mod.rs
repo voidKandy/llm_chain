@@ -3,7 +3,7 @@ pub mod rpc;
 use crate::{
     blockchain::chain::{init_blockchain, Blockchain},
     util::{
-        behaviour::NetworkTopic,
+        behaviour::gossip::NetworkTopic,
         json_rpc::{
             socket::{self},
             thread::RpcListeningThread,
@@ -11,7 +11,7 @@ use crate::{
     },
     MainResult,
 };
-use behaviour::{NodeBehaviourEvent, NodeNetworkBehaviour, SharedBehaviour};
+use behaviour::{NodeBehaviourEvent, NodeNetworkBehaviour};
 use futures::StreamExt;
 use libp2p::{
     gossipsub,
@@ -55,6 +55,7 @@ where
                 swarm_event = self.swarm.select_next_some() => {
                     tracing::warn!("swarm event: {swarm_event:#?}");
                     if let Some(event) = T::handle_swarm_event(self, swarm_event).await? {
+                        tracing::warn!("passed off event to default handler");
                         self.handle_swarm_event(event).await?
                     }
                 }
@@ -83,11 +84,10 @@ where
             )) if peer_id != *self.swarm.local_peer_id()
                 && topic == NetworkTopic::ChainUpdate.publish() =>
             {
-                self.swarm
-                    .behaviour_mut()
-                    .as_mut()
-                    .gossip
-                    .publish(topic, serde_json::to_vec(&self.blockchain)?)?;
+                self.swarm.behaviour_mut().as_mut().gossip.publish(
+                    topic,
+                    serde_json::to_vec(&self.blockchain).expect("failed to serialized blockchain"),
+                )?;
             }
             SwarmEvent::Behaviour(NodeBehaviourEvent::Gossip(
                 libp2p::gossipsub::Event::Message {

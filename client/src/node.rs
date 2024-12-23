@@ -1,37 +1,36 @@
-use std::time::Duration;
-
+use crate::behaviour::ClientNodeBehaviour;
 use core::{
-    node::{
-        behaviour::{NodeBehaviourEvent, SharedBehaviour},
-        Node, NodeType, NodeTypeEvent,
-    },
+    node::{behaviour::NodeBehaviourEvent, Node, NodeType, NodeTypeEvent},
     util::{
-        behaviour::{NetworkTopic, ProvisionBid},
+        behaviour::{
+            gossip::NetworkTopic, req_res::NetworkRequest, streaming::connection_handler,
+            ProvisionBid,
+        },
         heap::max::MaxHeap,
     },
     MainResult,
 };
 use libp2p::{
-    gossipsub,
+    futures::StreamExt,
+    gossipsub, request_response,
     swarm::{NetworkBehaviour, SwarmEvent},
     PeerId, Swarm,
 };
 use serde_json::json;
-
-use crate::behaviour::ClientNodeBehaviour;
+use std::time::Duration;
 
 pub struct ClientNode {
     state: ClientNodeState,
 }
+type State = ClientNodeState;
 
-pub enum ClientNodeState {
+enum ClientNodeState {
     Idle,
     Auctioning {
         start: std::time::Instant,
         bids: MaxHeap<ProvisionBid>,
     },
     AttemptingConnection {
-        sent_request: bool,
         bid: ProvisionBid,
         provider: PeerId,
     },
@@ -119,11 +118,7 @@ impl NodeType for ClientNode {
                 expected_amt_messages,
                 messages,
             } => Ok(None),
-            ClientNodeState::AttemptingConnection {
-                sent_request,
-                bid,
-                provider,
-            } => Ok(None),
+            ClientNodeState::AttemptingConnection { bid, provider } => Ok(None),
         }
     }
 
@@ -132,6 +127,30 @@ impl NodeType for ClientNode {
         Self: Sized,
     {
         tracing::warn!("client event: {e:#?}");
+        match (e, &node.inner.state) {
+            (ClientNodeEvent::ChoseBid(bid), ClientNodeState::Auctioning { .. }) => {
+                node.swarm
+                    .behaviour_mut()
+                    .shared
+                    .req_res
+                    .send_request(&bid.peer, NetworkRequest::OpenStream);
+                // maybe there is no need for attempting connection?
+                node.inner.state = ClientNodeState::AttemptingConnection {
+                    provider: bid.peer,
+                    bid,
+                }
+                // if !node.swarm.is_connected(&bid.peer) {
+                //     node.swarm
+                //         .dial(bid.peer)
+                //         .expect("client failed to dial peer");
+                // }
+                //
+                // let control = node.swarm.behaviour_mut().shared.stream.new_control();
+                //
+                // node.swarm.dial
+            }
+            _ => {}
+        }
         Ok(())
     }
 
@@ -142,24 +161,59 @@ impl NodeType for ClientNode {
     where
         Self: Sized,
     {
-        if let (
-            SwarmEvent::Behaviour(NodeBehaviourEvent::Gossip(gossipsub::Event::Message {
-                message: gossipsub::Message { topic, data, .. },
-                ..
-            })),
-            ClientNodeState::Auctioning { ref mut bids, .. },
-        ) = (&_e, &mut node.inner.state)
-        {
-            let this_peer_id = node.swarm.local_peer_id().clone();
-            if *topic == NetworkTopic::from(&this_peer_id).publish() {
+        match (_e, &mut node.inner.state) {
+            (
+                SwarmEvent::Behaviour(NodeBehaviourEvent::Gossip(gossipsub::Event::Message {
+                    message: gossipsub::Message { topic, data, .. },
+                    ..
+                })),
+                State::Auctioning { ref mut bids, .. },
+            ) if topic == NetworkTopic::from(node.swarm.local_peer_id()).publish() => {
                 let bid: ProvisionBid =
                     serde_json::from_slice(&data).expect("failed to serialize bid data");
                 tracing::warn!("received bid: {bid:#?}");
                 bids.insert(bid);
                 return Ok(None);
             }
-        }
+            (
+                SwarmEvent::Behaviour(NodeBehaviourEvent::ReqRes(
+                    request_response::Event::Message {
+                        peer,
+                        message:
+                            request_response::Message::Response {
+                                request_id,
+                                response,
+                            },
+                    },
+                )),
+                State::AttemptingConnection { bid, provider },
+            ) => {
+                // In this demo application, the dialing peer initiates the protocol.
 
-        return Ok(Some(_e));
+                if !node.swarm.is_connected(provider) {
+                    node.swarm.dial(*provider)?;
+                }
+
+                tokio::spawn(connection_handler(
+                    *provider,
+                    node.swarm.behaviour().shared.stream.new_control(),
+                ));
+
+                // Poll the swarm to make progress.
+                loop {
+                    let event = node.swarm.next().await.expect("never terminates");
+
+                    match event {
+                        libp2p::swarm::SwarmEvent::NewListenAddr { address, .. } => {
+                            let listen_address =
+                                address.with_p2p(*node.swarm.local_peer_id()).unwrap();
+                            tracing::info!(%listen_address);
+                        }
+                        event => tracing::trace!(?event),
+                    }
+                }
+            }
+            (event, _state) => Ok(Some(event)),
+        }
     }
 }

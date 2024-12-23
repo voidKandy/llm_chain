@@ -6,7 +6,7 @@ use core::blockchain::chain::{BOOT_NODE_KEYPAIR, BOOT_NODE_LISTEN_ADDR};
 use core::node::Node;
 use core::telemetry::TRACING;
 use libp2p::identity::Keypair;
-use node::{MinerNode, ProviderNode};
+use node::{miner::MinerNode, provider::ProviderNode};
 use std::sync::LazyLock;
 use tracing::warn;
 

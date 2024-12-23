@@ -4,7 +4,7 @@ pub mod heap;
 pub mod json_rpc;
 pub mod map_vec;
 use chrono::Utc;
-use libp2p::identity::PublicKey;
+use libp2p::{identity::PublicKey, StreamProtocol};
 
 pub fn now_timestamp_string() -> String {
     Utc::now().to_rfc2822()
