@@ -1,5 +1,5 @@
 use crate::helpers::TEST_TRACING;
-use llm_chain::util::map_vec::*;
+use core::util::map_vec::*;
 use serde::{Deserialize, Serialize};
 use std::sync::LazyLock;
 

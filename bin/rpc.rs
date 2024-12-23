@@ -1,7 +1,7 @@
 use clap::{Parser, Subcommand};
-use llm_chain::node::rpc::RequestWrapper;
-use llm_chain::util::json_rpc::{socket, RpcRequestWrapper};
-use llm_chain::{telemetry::TRACING, MainResult};
+use core::node::rpc::RequestWrapper;
+use core::util::json_rpc::{socket, RpcRequestWrapper};
+use core::{telemetry::TRACING, MainResult};
 use std::sync::LazyLock;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, Interest};
 use tokio::net::TcpStream;
@@ -25,9 +25,9 @@ enum Command {
 impl Into<RequestWrapper> for Command {
     fn into(self) -> RequestWrapper {
         match self {
-            Self::PeerCount => RequestWrapper::PeerCount(llm_chain::node::rpc::GetPeerCountRequest),
+            Self::PeerCount => RequestWrapper::PeerCount(core::node::rpc::GetPeerCountRequest),
             // obviously, this should be changed later
-            Self::GetBal => RequestWrapper::GetBalance(llm_chain::node::rpc::GetBalanceRequest {
+            Self::GetBal => RequestWrapper::GetBalance(core::node::rpc::GetBalanceRequest {
                 address: "".to_string(),
             }),
         }

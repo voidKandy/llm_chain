@@ -2,11 +2,11 @@ pub mod behaviour;
 pub mod node;
 
 use clap::Parser;
+use core::blockchain::chain::BOOT_NODE_LOCAL_ADDR;
+use core::node::Node;
+use core::telemetry::TRACING;
 use libp2p::identity::Keypair;
 use libp2p::{Multiaddr, PeerId};
-use llm_chain::blockchain::chain::BOOT_NODE_LOCAL_ADDR;
-use llm_chain::node::Node;
-use llm_chain::telemetry::TRACING;
 use node::ClientNode;
 use std::sync::LazyLock;
 use tracing;
@@ -25,7 +25,7 @@ struct Args {
 }
 
 #[tokio::main]
-async fn main() -> llm_chain::MainResult<()> {
+async fn main() -> core::MainResult<()> {
     LazyLock::force(&TRACING);
     let args = Args::parse();
     tracing::warn!("args: {args:#?}");

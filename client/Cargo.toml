@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-llm_chain = {path ="../"}
+core = {path ="../"}
 libp2p ={workspace = true}
 tokio ={workspace = true}
 serde_json={workspace=true}

@@ -486,8 +486,8 @@ name = "client"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "core",
  "libp2p",
- "llm_chain",
  "serde_json",
  "tokio",
  "tracing",
@@ -513,6 +513,27 @@ name = "const-oid"
 version = "0.9.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2459377285ad874054d797f3ccebf984978aa39129f6eafde5cdc8315b612f8"
+
+[[package]]
+name = "core"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "clap",
+ "futures",
+ "libp2p",
+ "macros",
+ "rand 0.8.5",
+ "serde",
+ "serde_json",
+ "sha3",
+ "thiserror 2.0.8",
+ "tokio",
+ "tracing",
+ "tracing-bunyan-formatter",
+ "tracing-log 0.2.0",
+ "tracing-subscriber",
+]
 
 [[package]]
 name = "core-foundation"
@@ -2078,27 +2099,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4ee93343901ab17bd981295f2cf0026d4ad018c7c31ba84549a4ddbb47a45104"
 
 [[package]]
-name = "llm_chain"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "clap",
- "futures",
- "libp2p",
- "macros",
- "rand 0.8.5",
- "serde",
- "serde_json",
- "sha3",
- "thiserror 2.0.8",
- "tokio",
- "tracing",
- "tracing-bunyan-formatter",
- "tracing-log 0.2.0",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "lock_api"
 version = "0.4.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3041,8 +3041,8 @@ name = "server"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "core",
  "libp2p",
- "llm_chain",
  "serde_json",
  "tokio",
  "tracing",

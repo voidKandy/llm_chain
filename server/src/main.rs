@@ -2,10 +2,10 @@ pub mod behaviour;
 pub mod node;
 
 use clap::{Parser, Subcommand};
+use core::blockchain::chain::{BOOT_NODE_KEYPAIR, BOOT_NODE_LISTEN_ADDR};
+use core::node::Node;
+use core::telemetry::TRACING;
 use libp2p::identity::Keypair;
-use llm_chain::blockchain::chain::{BOOT_NODE_KEYPAIR, BOOT_NODE_LISTEN_ADDR};
-use llm_chain::node::Node;
-use llm_chain::telemetry::TRACING;
 use node::{MinerNode, ProviderNode};
 use std::sync::LazyLock;
 use tracing::warn;
@@ -34,7 +34,7 @@ enum Command {
 }
 
 #[tokio::main]
-async fn main() -> llm_chain::MainResult<()> {
+async fn main() -> core::MainResult<()> {
     LazyLock::force(&TRACING);
     let args = Args::parse();
     warn!("args: {args:#?}");

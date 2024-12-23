@@ -1,11 +1,6 @@
 use std::time::Duration;
 
-use libp2p::{
-    gossipsub,
-    swarm::{NetworkBehaviour, SwarmEvent},
-    PeerId, Swarm,
-};
-use llm_chain::{
+use core::{
     node::{
         behaviour::{NodeBehaviourEvent, SharedBehaviour},
         Node, NodeType, NodeTypeEvent,
@@ -15,6 +10,11 @@ use llm_chain::{
         heap::max::MaxHeap,
     },
     MainResult,
+};
+use libp2p::{
+    gossipsub,
+    swarm::{NetworkBehaviour, SwarmEvent},
+    PeerId, Swarm,
 };
 use serde_json::json;
 

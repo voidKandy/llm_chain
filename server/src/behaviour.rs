@@ -1,5 +1,5 @@
+use core::node::behaviour::{NodeBehaviourEvent, NodeNetworkBehaviour, SharedBehaviour};
 use libp2p::{identity::Keypair, swarm::NetworkBehaviour};
-use llm_chain::node::behaviour::{NodeBehaviourEvent, NodeNetworkBehaviour, SharedBehaviour};
 
 #[derive(NetworkBehaviour)]
 #[behaviour(to_swarm = "NodeBehaviourEvent")]

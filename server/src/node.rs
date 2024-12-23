@@ -1,7 +1,7 @@
+use core::blockchain::transaction::transfer::Transfer;
+use core::util::map_vec::*;
+use core::{node::*, MainResult};
 use libp2p::Swarm;
-use llm_chain::blockchain::transaction::transfer::Transfer;
-use llm_chain::util::map_vec::*;
-use llm_chain::{node::*, MainResult};
 
 use crate::behaviour::ServerNodeBehaviour;
 
