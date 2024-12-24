@@ -5,7 +5,7 @@ use crate::{
 };
 use tokio::{
     net::ToSocketAddrs,
-    sync::mpsc::{error::TryRecvError, Receiver, Sender},
+    sync::mpsc::{Receiver, Sender},
     task::JoinHandle,
 };
 
@@ -19,11 +19,6 @@ const CHANNEL_BUF_SIZE: usize = 5;
 impl RpcListeningThread {
     pub async fn next_req(&mut self) -> MainResult<Option<socket::Request>> {
         Ok(self.recv.recv().await)
-        // match self.recv.try_recv() {
-        //     Err(TryRecvError::Disconnected) => return Err("Thread died".into()),
-        //     Err(TryRecvError::Empty) => Ok(None),
-        //     Ok(req) => Ok(Some(req)),
-        // }
     }
 
     pub async fn new(addr: impl ToSocketAddrs) -> MainResult<Self> {

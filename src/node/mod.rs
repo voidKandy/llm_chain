@@ -7,7 +7,9 @@ use crate::{
         json_rpc::{
             socket::{self},
             thread::RpcListeningThread,
+            ProcessRequestResult, RpcHandler, RpcRequestWrapper,
         },
+        OneOf,
     },
     MainResult,
 };
@@ -16,9 +18,10 @@ use futures::StreamExt;
 use libp2p::{
     gossipsub,
     identity::Keypair,
-    swarm::{NetworkBehaviour, Swarm, SwarmEvent},
+    swarm::{NetworkBehaviour, OneShotHandler, Swarm, SwarmEvent},
 };
-use std::time::Duration;
+use rpc::RequestWrapper;
+use std::{fmt::Debug, time::Duration};
 use tokio::net::ToSocketAddrs;
 
 pub struct Node<T: NodeType> {
@@ -27,6 +30,18 @@ pub struct Node<T: NodeType> {
     blockchain: Blockchain,
     pub swarm: Swarm<T::Behaviour>,
     pub inner: T,
+}
+
+impl<T> AsMut<Node<T>> for Node<T>
+where
+    T: NodeType,
+    <<T as NodeType>::Behaviour as NetworkBehaviour>::ToSwarm: std::fmt::Debug,
+    SwarmEvent<<<T as NodeType>::Behaviour as NetworkBehaviour>::ToSwarm>:
+        Into<SwarmEvent<NodeBehaviourEvent>>,
+{
+    fn as_mut(&mut self) -> &mut Node<T> {
+        self
+    }
 }
 
 impl<T> Node<T>
@@ -61,6 +76,7 @@ where
                 }
                 Ok(Some(req)) = self.rpc_thread.next_req() => {
                     let response = self.handle_rpc_request(req).await?;
+                    // let response = self.thrae req).await?;
                     self.rpc_thread.sender.send(response).await?;
                 },
                 Ok(Some(inner_event)) = self.inner.next_event() => {
@@ -144,9 +160,10 @@ where
 pub trait NodeTypeEvent: std::fmt::Debug {}
 
 #[allow(async_fn_in_trait, private_bounds)]
-pub trait NodeType {
+pub trait NodeType: Debug {
     type Behaviour: NodeNetworkBehaviour;
     type Event: NodeTypeEvent;
+    type RpcRequest: From<RequestWrapper>;
     /// Where any logic particular to the initialization of a swarm can be implemented
     /// (Particular gossip topics, etc..)
     fn init_with_swarm(swarm: &mut Swarm<Self::Behaviour>) -> MainResult<Self>
@@ -163,12 +180,22 @@ pub trait NodeType {
     /// The type bounds is the same as `SwarmEvent<NodeBehaviourEvent>`, it just needs to be
     /// written this way to appease the compiler
     async fn handle_swarm_event(
-        node: &mut Node<Self>,
+        _node: &mut Node<Self>,
         _e: SwarmEvent<<Self::Behaviour as NetworkBehaviour>::ToSwarm>,
     ) -> MainResult<Option<SwarmEvent<<Self::Behaviour as NetworkBehaviour>::ToSwarm>>>
     where
         Self: Sized,
     {
         Ok(Some(_e))
+    }
+
+    async fn handle_rpc_request(
+        _node: &mut Node<Self>,
+        _r: socket::Request,
+    ) -> MainResult<OneOf<socket::Request, ProcessRequestResult>>
+    where
+        Self: Sized,
+    {
+        Ok(OneOf::Left(_r))
     }
 }

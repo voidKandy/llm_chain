@@ -39,3 +39,10 @@ pub struct GetBalanceRequest {
 pub struct GetBalanceResponse {
     pub quantity: f64,
 }
+
+#[derive(RpcRequest, Debug, Clone, Serialize, Deserialize)]
+#[rpc_request(namespace = "Namespace:client")]
+pub struct FindProviderRequest;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FindProviderResponse {}

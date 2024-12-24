@@ -1,12 +1,13 @@
 use crate::behaviour::ClientNodeBehaviour;
 use core::{
-    node::{behaviour::NodeBehaviourEvent, Node, NodeType, NodeTypeEvent},
+    node::{behaviour::NodeBehaviourEvent, rpc::RequestWrapper, Node, NodeType, NodeTypeEvent},
     util::{
         behaviour::{
             gossip::NetworkTopic, req_res::NetworkRequest, streaming::connection_handler,
             ProvisionBid,
         },
         heap::max::MaxHeap,
+        json_rpc::RpcHandler,
     },
     MainResult,
 };
@@ -19,11 +20,13 @@ use libp2p::{
 use serde_json::json;
 use std::time::Duration;
 
+#[derive(Debug)]
 pub struct ClientNode {
     state: ClientNodeState,
 }
 type State = ClientNodeState;
 
+#[derive(Debug)]
 enum ClientNodeState {
     Idle,
     Auctioning {
@@ -79,6 +82,7 @@ impl NodeTypeEvent for ClientNodeEvent {}
 impl NodeType for ClientNode {
     type Behaviour = ClientNodeBehaviour;
     type Event = ClientNodeEvent;
+    type RpcRequest = RequestWrapper;
 
     fn init_with_swarm(_swarm: &mut Swarm<Self::Behaviour>) -> MainResult<Self>
     where

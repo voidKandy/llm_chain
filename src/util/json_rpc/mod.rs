@@ -1,6 +1,8 @@
 pub mod error;
 pub mod socket;
 pub mod thread;
+use std::fmt::Debug;
+
 use crate::MainResult;
 
 /// as per the Json RPC 2.0 spec
@@ -9,15 +11,6 @@ pub const JSONRPC_FIELD: &str = "2.0";
 pub trait RpcNamespace: PartialEq + Copy {
     fn as_str(&self) -> &str;
     fn try_from_str(str: &str) -> Option<Self>
-    where
-        Self: Sized;
-}
-
-pub trait RpcRequestWrapper {
-    fn into_rpc_request(self, id: u32) -> socket::Request
-    where
-        Self: Sized;
-    fn try_from_rpc_req(req: socket::Request) -> MainResult<Self>
     where
         Self: Sized;
 }
@@ -58,4 +51,48 @@ pub trait RpcRequest:
     fn try_from_json(json: &serde_json::Value) -> MainResult<Self>
     where
         Self: Sized;
+}
+
+pub trait RpcRequestWrapper: std::fmt::Debug {
+    fn into_rpc_request(self, id: u32) -> socket::Request
+    where
+        Self: Sized;
+    fn try_from_rpc_req(req: socket::Request) -> MainResult<Self>
+    where
+        Self: Sized;
+}
+
+pub type ProcessRequestResult = Result<serde_json::Value, socket::Error>;
+impl From<(ProcessRequestResult, String)> for socket::Response {
+    fn from((result, id): (ProcessRequestResult, String)) -> Self {
+        let jsonrpc = JSONRPC_FIELD.to_string();
+        match result {
+            Ok(json) => socket::Response {
+                jsonrpc,
+                id,
+                result: Some(json),
+                error: None,
+            },
+            Err(err) => socket::Response {
+                jsonrpc,
+                id,
+                result: None,
+                error: Some(err),
+            },
+        }
+    }
+}
+
+pub trait RpcHandler {
+    type ReqWrapper: RpcRequestWrapper;
+    // type Adaptee;
+
+    /// Handler does whatever it does with request and returns either a socket request `result` field, or an error
+    async fn process_request(&mut self, req: socket::Request) -> MainResult<ProcessRequestResult>;
+
+    async fn handle_rpc_request(&mut self, req: socket::Request) -> MainResult<socket::Response> {
+        let req_id = req.id.clone();
+        let result = self.process_request(req).await?;
+        Ok(socket::Response::from((result, req_id)))
+    }
 }

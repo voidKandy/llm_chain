@@ -2,10 +2,12 @@ use core::blockchain::transaction::transfer::Transfer;
 use core::util::map_vec::*;
 use core::{node::*, MainResult};
 use libp2p::Swarm;
+use rpc::RequestWrapper;
 
 use crate::behaviour::ServerNodeBehaviour;
 
 /// Does some basic POW and validates blocks
+#[derive(Debug)]
 pub struct MinerNode {
     mempool: MapVec<String, Transfer>,
 }
@@ -17,6 +19,7 @@ impl NodeTypeEvent for MinerNodeEvent {}
 impl NodeType for MinerNode {
     type Behaviour = ServerNodeBehaviour;
     type Event = MinerNodeEvent;
+    type RpcRequest = RequestWrapper;
 
     fn init_with_swarm(swarm: &mut Swarm<Self::Behaviour>) -> MainResult<Self>
     where

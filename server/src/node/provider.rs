@@ -9,15 +9,19 @@ use core::{
     MainResult,
 };
 use libp2p::{futures::StreamExt, gossipsub, request_response, swarm::SwarmEvent, Swarm};
+use rpc::RequestWrapper;
 use tokio::task::JoinHandle;
 
 use crate::behaviour::ServerNodeBehaviour;
 
 /// provides model work
+
+#[derive(Debug)]
 pub struct ProviderNode {
     state: ProviderNodeState,
 }
 type State = ProviderNodeState;
+#[derive(Debug)]
 enum ProviderNodeState {
     Idle,
     ListeningForStream(JoinHandle<()>),
@@ -66,6 +70,8 @@ impl ProviderNode {
 impl NodeType for ProviderNode {
     type Behaviour = ServerNodeBehaviour;
     type Event = ProviderNodeEvent;
+    type RpcRequest = RequestWrapper;
+
     fn init_with_swarm(swarm: &mut Swarm<Self::Behaviour>) -> MainResult<Self>
     where
         Self: Sized,
