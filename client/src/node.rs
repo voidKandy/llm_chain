@@ -1,13 +1,17 @@
 use crate::behaviour::ClientNodeBehaviour;
 use core::{
-    node::{behaviour::NodeBehaviourEvent, rpc::RequestWrapper, Node, NodeType, NodeTypeEvent},
+    node::{
+        behaviour::NodeBehaviourEvent,
+        rpc::Namespace,
+        rpc::{GetBalanceRequest, GetPeerCountRequest, RequestWrapper},
+        Node, NodeType, NodeTypeEvent,
+    },
     util::{
         behaviour::{
             gossip::NetworkTopic, req_res::NetworkRequest, streaming::connection_handler,
             ProvisionBid,
         },
         heap::max::MaxHeap,
-        json_rpc::RpcHandler,
     },
     MainResult,
 };
@@ -17,6 +21,7 @@ use libp2p::{
     swarm::{NetworkBehaviour, SwarmEvent},
     PeerId, Swarm,
 };
+use seraphic::{socket, RpcNamespace, RpcRequest, RpcRequestWrapper, RpcResponse};
 use serde_json::json;
 use std::time::Duration;
 
@@ -78,6 +83,29 @@ pub enum ClientNodeEvent {
     GotCompletion { provider: PeerId, content: String },
 }
 impl NodeTypeEvent for ClientNodeEvent {}
+
+impl From<RequestWrapper> for ClientRequestWrapper {
+    fn from(value: RequestWrapper) -> Self {
+        match value {
+            RequestWrapper::PeerCount(e) => Self::PeerCount(e),
+            RequestWrapper::GetBalance(e) => Self::GetBalance(e),
+        }
+    }
+}
+
+#[derive(RpcRequestWrapper, Debug)]
+enum ClientRequestWrapper {
+    PeerCount(GetPeerCountRequest),
+    GetBalance(GetBalanceRequest),
+    Client(FindProviderRequest),
+}
+
+#[derive(RpcRequest, Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[rpc_request(namespace = "Namespace:client")]
+pub struct FindProviderRequest;
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct FindProviderResponse {}
 
 impl NodeType for ClientNode {
     type Behaviour = ClientNodeBehaviour;

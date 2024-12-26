@@ -488,6 +488,8 @@ dependencies = [
  "clap",
  "core",
  "libp2p",
+ "seraphic",
+ "serde",
  "serde_json",
  "tokio",
  "tracing",
@@ -525,6 +527,7 @@ dependencies = [
  "libp2p-stream",
  "macros",
  "rand 0.8.5",
+ "seraphic",
  "serde",
  "serde_json",
  "sha3",
@@ -3019,6 +3022,31 @@ name = "semver"
 version = "1.0.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3cb6eb87a131f756572d7fb904f6e7b68633f09cca868c5df1c4b8d1a694bbba"
+
+[[package]]
+name = "seraphic"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dc53f29ce00e502d480b809f818a000f842420534b8011a1df938a24432f8fde"
+dependencies = [
+ "seraphic-derive",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "seraphic-derive"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cad78ee5254a613c8fac755f49b231b60a1d3bac04bbcfddeb3638e429c7500d"
+dependencies = [
+ "darling",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.90",
+]
 
 [[package]]
 name = "serde"

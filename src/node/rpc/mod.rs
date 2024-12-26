@@ -1,16 +1,15 @@
 pub mod messages;
-use std::marker::PhantomData;
 
 use super::*;
 use crate::{
     blockchain::transaction::{mint::Mint, transfer::Transfer, UTXO},
     util::{
-        json_rpc::{ProcessRequestResult, RpcRequestWrapper},
         map_vec::{Contains, MapVec},
         PublicKeyBytes,
     },
 };
 pub use messages::*;
+use seraphic::ProcessRequestResult;
 
 impl<T> RpcHandler for Node<T>
 where
@@ -21,7 +20,7 @@ where
 {
     /// Node<T>'s default request wrapper
     type ReqWrapper = RequestWrapper;
-    async fn process_request(&mut self, req: socket::Request) -> MainResult<ProcessRequestResult> {
+    async fn process_request(&mut self, req: Self::ReqWrapper) -> MainResult<ProcessRequestResult> {
         tracing::warn!("processing: {req:#?}");
         // T also specifies it's own wrapper which can be either the default, or its own
         match T::handle_rpc_request(self, req).await? {
@@ -29,7 +28,7 @@ where
             OneOf::Right(res) => Ok(res),
             // in this branch T has no overwrite for the request
             OneOf::Left(req) => {
-                match Self::ReqWrapper::try_from_rpc_req(req)? {
+                match req {
                     RequestWrapper::PeerCount(_) => {
                         let count = self
                             .swarm

@@ -2,15 +2,7 @@ pub mod behaviour;
 pub mod rpc;
 use crate::{
     blockchain::chain::{init_blockchain, Blockchain},
-    util::{
-        behaviour::gossip::NetworkTopic,
-        json_rpc::{
-            socket::{self},
-            thread::RpcListeningThread,
-            ProcessRequestResult, RpcHandler, RpcRequestWrapper,
-        },
-        OneOf,
-    },
+    util::{behaviour::gossip::NetworkTopic, OneOf},
     MainResult,
 };
 use behaviour::{NodeBehaviourEvent, NodeNetworkBehaviour};
@@ -21,6 +13,11 @@ use libp2p::{
     swarm::{NetworkBehaviour, OneShotHandler, Swarm, SwarmEvent},
 };
 use rpc::RequestWrapper;
+use seraphic::{
+    socket::{self},
+    thread::RpcListeningThread,
+    ProcessRequestResult, RpcHandler, RpcRequestWrapper,
+};
 use std::{fmt::Debug, time::Duration};
 use tokio::net::ToSocketAddrs;
 
@@ -74,7 +71,7 @@ where
                         self.handle_swarm_event(event).await?
                     }
                 }
-                Ok(Some(req)) = self.rpc_thread.next_req() => {
+                Some(req) = self.rpc_thread.recv.recv() => {
                     let response = self.handle_rpc_request(req).await?;
                     // let response = self.thrae req).await?;
                     self.rpc_thread.sender.send(response).await?;
@@ -191,8 +188,8 @@ pub trait NodeType: Debug {
 
     async fn handle_rpc_request(
         _node: &mut Node<Self>,
-        _r: socket::Request,
-    ) -> MainResult<OneOf<socket::Request, ProcessRequestResult>>
+        _r: RequestWrapper,
+    ) -> MainResult<OneOf<RequestWrapper, ProcessRequestResult>>
     where
         Self: Sized,
     {

@@ -24,6 +24,7 @@ members = ["macros",   "server", "client"]
 
 [dependencies]
 macros = { workspace = true }
+seraphic = { workspace = true }
 futures ={ workspace = true}
 chrono ={workspace = true}
 sha3 ={workspace = true}
@@ -44,6 +45,7 @@ libp2p-stream = "0.2.0-alpha"
 
 [workspace.dependencies]
 macros = { path ="./macros"}
+seraphic = { version ="0.1.1" }
 client = { path ="./client"}
 server = { path ="./server"}
 futures = "0.3.31"

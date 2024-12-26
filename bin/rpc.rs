@@ -1,7 +1,7 @@
 use clap::{Parser, Subcommand};
 use core::node::rpc::RequestWrapper;
-use core::util::json_rpc::{socket, RpcRequestWrapper};
 use core::{telemetry::TRACING, MainResult};
+use seraphic::{socket, RpcRequestWrapper};
 use std::sync::LazyLock;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, Interest};
 use tokio::net::TcpStream;

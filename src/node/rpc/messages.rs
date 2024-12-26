@@ -1,10 +1,6 @@
-use crate::{
-    util::json_rpc::{socket, RpcNamespace, RpcRequest, RpcRequestWrapper, RpcResponse},
-    MainResult,
-};
-use macros::RpcNamespace;
-use macros::RpcRequest;
-use macros::RpcRequestWrapper;
+use crate::MainResult;
+
+use seraphic::{socket, RpcNamespace, RpcRequest, RpcRequestWrapper, RpcResponse};
 use serde::{Deserialize, Serialize};
 
 #[derive(RpcNamespace, Debug, Copy, Clone, PartialEq)]
@@ -39,10 +35,3 @@ pub struct GetBalanceRequest {
 pub struct GetBalanceResponse {
     pub quantity: f64,
 }
-
-#[derive(RpcRequest, Debug, Clone, Serialize, Deserialize)]
-#[rpc_request(namespace = "Namespace:client")]
-pub struct FindProviderRequest;
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FindProviderResponse {}
