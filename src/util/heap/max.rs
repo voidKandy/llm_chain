@@ -145,7 +145,7 @@ mod tests {
         assert!(ids.len() == bids.len());
         let mut heap_vec = Vec::new();
         for i in 0..bids.len() {
-            let bid = ProvisionBid::new(ids[i], 55, bids[i]);
+            let bid = ProvisionBid::new(ids[i], bids[i]);
             // let tx = PendingTransaction::new(ids[i], bids[i], String::new());
             heap_vec.push(bid);
         }
@@ -180,7 +180,7 @@ mod tests {
             let keys = Keypair::generate_ed25519();
             let id = PeerId::from(keys.public());
             // ids.push(id);
-            heap.insert(ProvisionBid::new(id, 55, input[i]));
+            heap.insert(ProvisionBid::new(id, input[i]));
         }
 
         assert_eq!(heap.pop().unwrap().bid, 65.);

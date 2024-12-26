@@ -7,12 +7,14 @@ pub enum ClientNodeNamespace {
 
 #[derive(RpcRequestWrapper, Debug)]
 pub enum ClientRequestWrapper {
-    FindProvider(FindProviderRequest),
+    StartAuction(StartAuctionRequest),
 }
 
 #[derive(RpcRequest, Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[rpc_request(namespace = "ClientNodeNamespace:client")]
-pub struct FindProviderRequest;
+pub struct StartAuctionRequest;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct FindProviderResponse {}
+pub struct StartAuctionResponse {
+    pub started: bool,
+}

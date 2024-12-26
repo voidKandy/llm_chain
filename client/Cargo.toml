@@ -11,7 +11,7 @@ name="client"
 path="bin/main.rs"
 
 [[bin]]
-name="client-rpc"
+name="rpc"
 path="bin/rpc.rs"
 
 

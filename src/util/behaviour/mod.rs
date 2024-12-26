@@ -7,11 +7,12 @@ use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 
 pub const IDENTIFY_ID: &str = "/id/1.0.0";
+
 /// Sent by provider to request that it provide to client
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
 pub struct ProvisionBid {
     pub peer: PeerId,
-    distance: u64,
+    // distance: u64,
     pub bid: f64,
 }
 
@@ -30,10 +31,10 @@ pub enum BidResponse {
 }
 
 impl ProvisionBid {
-    pub fn new(peer: PeerId, distance: u64, bid: f64) -> Self {
+    pub fn new(peer: PeerId, bid: f64) -> Self {
         Self {
             peer,
-            distance,
+            // distance,
             bid,
         }
     }

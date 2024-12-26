@@ -5,10 +5,11 @@ use core::{
         gossip::NetworkTopic,
         req_res::NetworkResponse,
         streaming::{echo, STREAM_PROTOCOL},
+        ProvisionBid,
     },
     MainResult,
 };
-use libp2p::{futures::StreamExt, gossipsub, request_response, swarm::SwarmEvent, Swarm};
+use libp2p::{futures::StreamExt, gossipsub, request_response, swarm::SwarmEvent, PeerId, Swarm};
 use rpc::RequestWrapper;
 use tokio::task::JoinHandle;
 
@@ -32,6 +33,17 @@ pub enum ProviderNodeEvent {}
 impl NodeTypeEvent for ProviderNodeEvent {}
 
 impl ProviderNode {
+    fn send_bid(node: &mut Node<Self>, client_peer_id: &PeerId) -> MainResult<()> {
+        let bid = ProvisionBid::new(*client_peer_id, 5.0);
+        let bytes = serde_json::to_vec(&bid)?;
+        node.swarm.behaviour_mut().shared.gossip.publish(
+            NetworkTopic::from(client_peer_id).publish(),
+            // not yet sure how to determine bid amounts
+            bytes,
+        )?;
+        Ok(())
+    }
+
     fn start_listening_for_stream(node: &mut Node<Self>) -> MainResult<()> {
         let mut incoming_streams = node
             .swarm
@@ -133,7 +145,7 @@ impl NodeType for ProviderNode {
                 )),
                 State::Idle,
             ) => {
-                Self::start_listening_for_stream(node);
+                Self::start_listening_for_stream(node)?;
                 node.swarm
                     .behaviour_mut()
                     .shared
@@ -157,7 +169,12 @@ impl NodeType for ProviderNode {
                 )),
                 State::Idle,
             ) if topic == NetworkTopic::Auction.publish() => {
-                // should send a bid
+                ProviderNode::send_bid(
+                    node,
+                    source
+                        .as_ref()
+                        .expect("no source from auction start gossip"),
+                );
                 Ok(None)
             }
             (event, _state) => return Ok(Some(event)),

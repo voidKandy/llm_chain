@@ -10,9 +10,8 @@ use futures::StreamExt;
 use libp2p::{
     gossipsub,
     identity::Keypair,
-    swarm::{NetworkBehaviour, OneShotHandler, Swarm, SwarmEvent},
+    swarm::{NetworkBehaviour, Swarm, SwarmEvent},
 };
-use rpc::RequestWrapper;
 use seraphic::{
     socket::{self},
     thread::RpcListeningThread,

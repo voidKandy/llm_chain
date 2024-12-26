@@ -1,13 +1,9 @@
 use crate::{
     behaviour::ClientNodeBehaviour,
-    rpc::{ClientRequestWrapper, FindProviderResponse},
+    rpc::{ClientRequestWrapper, StartAuctionResponse},
 };
 use core::{
-    node::{
-        behaviour::NodeBehaviourEvent,
-        rpc::{GetBalanceRequest, GetPeerCountRequest, Namespace, RequestWrapper},
-        Node, NodeType, NodeTypeEvent,
-    },
+    node::{behaviour::NodeBehaviourEvent, Node, NodeType, NodeTypeEvent},
     util::{
         behaviour::{
             gossip::NetworkTopic, req_res::NetworkRequest, streaming::connection_handler,
@@ -59,7 +55,7 @@ impl ClientNode {
         // definately should be a struct later, but for now this is fine
         let data = json!({
         // amt of input tokens
-        "input_length": 50
+            "input_length": 50
         });
 
         node.swarm
@@ -243,9 +239,12 @@ impl NodeType for ClientNode {
         };
 
         match req {
-            ClientRequestWrapper::FindProvider(req) => {
-                warn!("client handling FindProvider");
-                let response = FindProviderResponse {};
+            ClientRequestWrapper::StartAuction(req) => {
+                warn!("client handling StartAuction");
+                let start = ClientNode::start_auction(_node);
+                let response = StartAuctionResponse {
+                    started: start.is_ok(),
+                };
                 let json = serde_json::to_value(response)?;
                 return Ok(OneOf::Right(Ok(json)));
             }

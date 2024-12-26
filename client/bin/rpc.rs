@@ -17,13 +17,13 @@ struct Args {
 
 #[derive(Subcommand, Debug)]
 enum Command {
-    GetProviders,
+    StartAuction,
 }
 
 impl Command {
     fn into_req(self, id: impl ToString) -> socket::Request {
         match self {
-            Self::GetProviders => client::rpc::FindProviderRequest
+            Self::StartAuction => client::rpc::StartAuctionRequest
                 .into_rpc_request(id)
                 .unwrap(),
         }
@@ -67,10 +67,10 @@ async fn main() -> core::MainResult<()> {
             }
         }
 
-        println!("accepting input: \nproviders | exit");
+        println!("accepting input: \nauction | exit");
         stdin.read_line(&mut buf)?;
         let command = match buf.drain(..).collect::<String>().trim() {
-            "providers" => Command::GetProviders,
+            "auction" => Command::StartAuction,
             "exit" => panic!("exit"),
             _ => {
                 tracing::warn!("{buf} is not a valid input");
