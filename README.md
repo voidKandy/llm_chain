@@ -9,7 +9,8 @@ An example of an implementation of a client node on this chain using methods, tr
 ### `server`
 An example of an implementation of a server node on this chain using methods, traits and structs from the `core` library.
 ### `macros`
-Helper derive macros for an assortment of traits from the `core` library.
+Helper derive macros for an assortment of traits from the `core` library. 
+Currently empty
 
 ## Scripts
 + `tests/scripts/try_rpc.sh` - Uses the `rpc.rs` & `server/main.rs` binaries to test the JSON RPC API for the server node. This script depends on tmux 

@@ -1,13 +1,10 @@
-use crate::MainResult;
-
-use seraphic::{socket, RpcNamespace, RpcRequest, RpcRequestWrapper, RpcResponse};
+use seraphic::{RpcNamespace, RpcRequest, RpcRequestWrapper};
 use serde::{Deserialize, Serialize};
 
 #[derive(RpcNamespace, Debug, Copy, Clone, PartialEq)]
 pub enum Namespace {
     Chain,
     Net,
-    Client,
 }
 
 #[derive(RpcRequestWrapper, Debug)]

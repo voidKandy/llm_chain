@@ -7,10 +7,6 @@ edition = "2021"
 path="src/lib.rs"
 
 [[bin]]
-name="client"
-path="client/src/main.rs"
-
-[[bin]]
 name="server"
 path="server/src/main.rs"
 
@@ -21,6 +17,8 @@ path="bin/rpc.rs"
 
 [workspace]
 members = ["macros",   "server", "client"]
+
+
 
 [dependencies]
 macros = { workspace = true }
@@ -45,7 +43,7 @@ libp2p-stream = "0.2.0-alpha"
 
 [workspace.dependencies]
 macros = { path ="./macros"}
-seraphic = { version ="0.1.1" }
+seraphic = { version ="0.1.3" }
 client = { path ="./client"}
 server = { path ="./server"}
 futures = "0.3.31"

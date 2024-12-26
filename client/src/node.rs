@@ -1,9 +1,11 @@
-use crate::behaviour::ClientNodeBehaviour;
+use crate::{
+    behaviour::ClientNodeBehaviour,
+    rpc::{ClientRequestWrapper, FindProviderResponse},
+};
 use core::{
     node::{
         behaviour::NodeBehaviourEvent,
-        rpc::Namespace,
-        rpc::{GetBalanceRequest, GetPeerCountRequest, RequestWrapper},
+        rpc::{GetBalanceRequest, GetPeerCountRequest, Namespace, RequestWrapper},
         Node, NodeType, NodeTypeEvent,
     },
     util::{
@@ -12,6 +14,7 @@ use core::{
             ProvisionBid,
         },
         heap::max::MaxHeap,
+        OneOf,
     },
     MainResult,
 };
@@ -21,9 +24,10 @@ use libp2p::{
     swarm::{NetworkBehaviour, SwarmEvent},
     PeerId, Swarm,
 };
-use seraphic::{socket, RpcNamespace, RpcRequest, RpcRequestWrapper, RpcResponse};
+use seraphic::{socket, RpcRequestWrapper};
 use serde_json::json;
 use std::time::Duration;
+use tracing::warn;
 
 #[derive(Debug)]
 pub struct ClientNode {
@@ -76,41 +80,18 @@ impl ClientNode {
 }
 
 #[derive(Debug)]
-// MACRO COULD BE HERE
 pub enum ClientNodeEvent {
     UserInput(String),
     ChoseBid(ProvisionBid),
     GotCompletion { provider: PeerId, content: String },
 }
+
 impl NodeTypeEvent for ClientNodeEvent {}
-
-impl From<RequestWrapper> for ClientRequestWrapper {
-    fn from(value: RequestWrapper) -> Self {
-        match value {
-            RequestWrapper::PeerCount(e) => Self::PeerCount(e),
-            RequestWrapper::GetBalance(e) => Self::GetBalance(e),
-        }
-    }
-}
-
-#[derive(RpcRequestWrapper, Debug)]
-enum ClientRequestWrapper {
-    PeerCount(GetPeerCountRequest),
-    GetBalance(GetBalanceRequest),
-    Client(FindProviderRequest),
-}
-
-#[derive(RpcRequest, Debug, Clone, serde::Serialize, serde::Deserialize)]
-#[rpc_request(namespace = "Namespace:client")]
-pub struct FindProviderRequest;
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct FindProviderResponse {}
 
 impl NodeType for ClientNode {
     type Behaviour = ClientNodeBehaviour;
     type Event = ClientNodeEvent;
-    type RpcRequest = RequestWrapper;
+    type RpcRequest = ClientRequestWrapper;
 
     fn init_with_swarm(_swarm: &mut Swarm<Self::Behaviour>) -> MainResult<Self>
     where
@@ -246,6 +227,28 @@ impl NodeType for ClientNode {
                 }
             }
             (event, _state) => Ok(Some(event)),
+        }
+    }
+
+    async fn handle_rpc_request(
+        _node: &mut Node<Self>,
+        _r: socket::Request,
+    ) -> MainResult<core::util::OneOf<socket::Request, seraphic::ProcessRequestResult>>
+    where
+        Self: Sized,
+    {
+        let req = match Self::RpcRequest::try_from_rpc_req(_r.clone()) {
+            Err(_) => return Ok(OneOf::Left(_r)),
+            Ok(req) => req,
+        };
+
+        match req {
+            ClientRequestWrapper::FindProvider(req) => {
+                warn!("client handling FindProvider");
+                let response = FindProviderResponse {};
+                let json = serde_json::to_value(response)?;
+                return Ok(OneOf::Right(Ok(json)));
+            }
         }
     }
 }

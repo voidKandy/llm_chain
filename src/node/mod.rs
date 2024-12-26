@@ -160,7 +160,7 @@ pub trait NodeTypeEvent: std::fmt::Debug {}
 pub trait NodeType: Debug {
     type Behaviour: NodeNetworkBehaviour;
     type Event: NodeTypeEvent;
-    type RpcRequest: From<RequestWrapper>;
+    type RpcRequest: RpcRequestWrapper;
     /// Where any logic particular to the initialization of a swarm can be implemented
     /// (Particular gossip topics, etc..)
     fn init_with_swarm(swarm: &mut Swarm<Self::Behaviour>) -> MainResult<Self>
@@ -188,8 +188,8 @@ pub trait NodeType: Debug {
 
     async fn handle_rpc_request(
         _node: &mut Node<Self>,
-        _r: RequestWrapper,
-    ) -> MainResult<OneOf<RequestWrapper, ProcessRequestResult>>
+        _r: socket::Request,
+    ) -> MainResult<OneOf<socket::Request, ProcessRequestResult>>
     where
         Self: Sized,
     {

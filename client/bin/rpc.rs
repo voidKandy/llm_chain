@@ -1,5 +1,5 @@
 use clap::{Parser, Subcommand};
-use core::{telemetry::TRACING, MainResult};
+use core::telemetry::TRACING;
 use seraphic::{socket, RpcRequest};
 use std::sync::LazyLock;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, Interest};
@@ -17,28 +17,21 @@ struct Args {
 
 #[derive(Subcommand, Debug)]
 enum Command {
-    PeerCount,
-    GetBal,
+    GetProviders,
 }
 
 impl Command {
     fn into_req(self, id: impl ToString) -> socket::Request {
         match self {
-            Self::PeerCount => core::node::rpc::GetPeerCountRequest
+            Self::GetProviders => client::rpc::FindProviderRequest
                 .into_rpc_request(id)
                 .unwrap(),
-            // obviously, this should be changed later
-            Self::GetBal => core::node::rpc::GetBalanceRequest {
-                address: "".to_string(),
-            }
-            .into_rpc_request(id)
-            .unwrap(),
         }
     }
 }
 
 #[tokio::main]
-async fn main() -> MainResult<()> {
+async fn main() -> core::MainResult<()> {
     LazyLock::force(&TRACING);
     let args = Args::parse();
     warn!("args: {args:#?}");
@@ -74,11 +67,10 @@ async fn main() -> MainResult<()> {
             }
         }
 
-        println!("accepting input: \npeer-count | get-bal | exit");
+        println!("accepting input: \nproviders | exit");
         stdin.read_line(&mut buf)?;
         let command = match buf.drain(..).collect::<String>().trim() {
-            "peer-count" => Command::PeerCount,
-            "get-bal" => Command::GetBal,
+            "providers" => Command::GetProviders,
             "exit" => panic!("exit"),
             _ => {
                 tracing::warn!("{buf} is not a valid input");

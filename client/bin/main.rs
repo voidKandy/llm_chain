@@ -1,17 +1,12 @@
-pub mod behaviour;
-pub mod node;
-
 use clap::Parser;
+use client::node::ClientNode;
 use core::blockchain::chain::BOOT_NODE_LOCAL_ADDR;
 use core::node::Node;
 use core::telemetry::TRACING;
 use libp2p::identity::Keypair;
 use libp2p::{Multiaddr, PeerId};
-use node::ClientNode;
 use std::sync::LazyLock;
 use tracing;
-
-// https://github.com/libp2p/rust-libp2p/tree/master/examples/rendezvous
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
