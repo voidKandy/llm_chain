@@ -13,5 +13,10 @@ Helper derive macros for an assortment of traits from the `core` library.
 Currently empty
 
 ## Scripts
-+ `tests/scripts/try_rpc.sh` - Uses the `rpc.rs` & `server/main.rs` binaries to test the JSON RPC API for the server node. This script depends on tmux 
+All scripts depend on tmux
++ `tests/scripts/try_rpc.sh` - Uses the `rpc.rs` & `server/main.rs` binaries to test the JSON RPC API for the server node
++ `tests/scripts/client_start_auction.sh` - Uses multiple binaries to do the following: 
+    1. Spin up provider boot node
+    2. Spin up client node & connect to network through boot node
+    3. Send a JSON RPC request to the client to start auctioning 
 
