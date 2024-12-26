@@ -3,15 +3,14 @@ use crate::{
     rpc::{ClientRequestWrapper, StartAuctionResponse},
 };
 use core::{
-    node::{behaviour::NodeBehaviourEvent, Node, NodeType, NodeTypeEvent},
-    util::{
-        behaviour::{
-            gossip::NetworkTopic, req_res::NetworkRequest, streaming::connection_handler,
-            ProvisionBid,
-        },
-        heap::max::MaxHeap,
-        OneOf,
+    behaviour::{
+        gossip::NetworkTopic,
+        req_res::{NetworkRequest, NetworkResponse},
+        streaming::connection_handler,
+        ProvisionBid,
     },
+    node::{behaviour::NodeBehaviourEvent, Node, NodeType, NodeTypeEvent},
+    util::{heap::max::MaxHeap, OneOf},
     MainResult,
 };
 use libp2p::{
@@ -114,10 +113,7 @@ impl NodeType for ClientNode {
                 if elapsed >= AUCTIONING_DURATION && bids.len() > 0 {
                     if bids.peek().is_some() {
                         let bid = bids.pop().expect("failed to get bid from heap");
-                        // tracing::warn!("bid: {}, balance: {}", bid.bid, self.wallet.balance,);
-                        // if self.wallet.balance > bid.bid {
                         return Ok(Some(ClientNodeEvent::ChoseBid(bid)));
-                        // }
                     }
                 }
                 Ok(None)
@@ -143,6 +139,7 @@ impl NodeType for ClientNode {
                     .shared
                     .req_res
                     .send_request(&bid.peer, NetworkRequest::OpenStream);
+
                 // maybe there is no need for attempting connection?
                 node.inner.state = ClientNodeState::AttemptingConnection {
                     provider: bid.peer,
@@ -191,12 +188,17 @@ impl NodeType for ClientNode {
                         message:
                             request_response::Message::Response {
                                 request_id,
-                                response,
+                                response: NetworkResponse::OpenStreamAck { opened },
                             },
                     },
                 )),
                 State::AttemptingConnection { bid, provider },
             ) => {
+                if !opened {
+                    tracing::error!("provider is busy, could not connect. Returning to idle state");
+                    node.inner.state = State::Idle;
+                    return Ok(None);
+                }
                 // In this demo application, the dialing peer initiates the protocol.
 
                 if !node.swarm.is_connected(provider) {

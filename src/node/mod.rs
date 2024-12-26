@@ -1,8 +1,9 @@
 pub mod behaviour;
 pub mod rpc;
 use crate::{
+    behaviour::gossip::NetworkTopic,
     blockchain::chain::{init_blockchain, Blockchain},
-    util::{behaviour::gossip::NetworkTopic, OneOf},
+    util::OneOf,
     MainResult,
 };
 use behaviour::{NodeBehaviourEvent, NodeNetworkBehaviour};
@@ -72,14 +73,14 @@ where
                 }
                 Some(req) = self.rpc_thread.recv.recv() => {
                     let response = self.handle_rpc_request(req).await?;
-                    // let response = self.thrae req).await?;
                     self.rpc_thread.sender.send(response).await?;
                 },
-                Ok(Some(inner_event)) = self.inner.next_event() => {
-                    tracing::warn!("inner event: {inner_event:#?}");
-                    T::handle_self_event(self, inner_event).await?;
+                Ok(event_opt) = self.inner.next_event() => {
+                    if let Some(event) = event_opt {
+                        tracing::warn!("inner event: {event:#?}");
+                        T::handle_self_event(self, event).await?;
+                    }
                 },
-
             }
         }
     }

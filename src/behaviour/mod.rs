@@ -1,7 +1,7 @@
 pub mod gossip;
 pub mod req_res;
 pub mod streaming;
-use super::heap::max::MaxHeapable;
+use crate::util::heap::max::MaxHeapable;
 use libp2p::PeerId;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;

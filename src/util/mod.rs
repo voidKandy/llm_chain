@@ -1,4 +1,3 @@
-pub mod behaviour;
 pub mod hash;
 pub mod heap;
 // pub mod json_rpc;

@@ -1,3 +1,4 @@
+pub mod behaviour;
 pub mod blockchain;
 pub mod node;
 pub mod runtime;

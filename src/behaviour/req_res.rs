@@ -12,6 +12,6 @@ pub enum NetworkRequest {
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
 pub enum NetworkResponse {
     /// provider lets client know that it has started listening,
-    OpenStreamAck,
+    OpenStreamAck { opened: bool },
     // Chain(Blockchain),
 }

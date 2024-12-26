@@ -1,12 +1,12 @@
 use behaviour::NodeBehaviourEvent;
 use core::{
-    node::*,
-    util::behaviour::{
+    behaviour::{
         gossip::NetworkTopic,
         req_res::NetworkResponse,
         streaming::{echo, STREAM_PROTOCOL},
         ProvisionBid,
     },
+    node::*,
     MainResult,
 };
 use libp2p::{futures::StreamExt, gossipsub, request_response, swarm::SwarmEvent, PeerId, Swarm};
@@ -34,7 +34,7 @@ impl NodeTypeEvent for ProviderNodeEvent {}
 
 impl ProviderNode {
     fn send_bid(node: &mut Node<Self>, client_peer_id: &PeerId) -> MainResult<()> {
-        let bid = ProvisionBid::new(*client_peer_id, 5.0);
+        let bid = ProvisionBid::new(*node.swarm.local_peer_id(), 5.0);
         let bytes = serde_json::to_vec(&bid)?;
         node.swarm.behaviour_mut().shared.gossip.publish(
             NetworkTopic::from(client_peer_id).publish(),
@@ -63,11 +63,11 @@ impl ProviderNode {
 
             while let Some((peer, stream)) = incoming_streams.next().await {
                 match echo(stream).await {
-                    Ok(n) => {
-                        tracing::info!(%peer, "Echoed {n} bytes!");
+                    Ok(_) => {
+                        tracing::info!(%peer, "Echoed bytes!");
                     }
                     Err(e) => {
-                        tracing::warn!(%peer, "Echo failed: {e}");
+                        tracing::error!(%peer, "Echo failed: {e}");
                         continue;
                     }
                 };
@@ -145,12 +145,23 @@ impl NodeType for ProviderNode {
                 )),
                 State::Idle,
             ) => {
+                // Provider is already listening, it cannot connect
+                if let State::ListeningForStream(_) = node.inner.state {
+                    node.swarm
+                        .behaviour_mut()
+                        .shared
+                        .req_res
+                        .send_response(channel, NetworkResponse::OpenStreamAck { opened: false })
+                        .unwrap();
+                    return Ok(None);
+                }
+
                 Self::start_listening_for_stream(node)?;
                 node.swarm
                     .behaviour_mut()
                     .shared
                     .req_res
-                    .send_response(channel, NetworkResponse::OpenStreamAck)
+                    .send_response(channel, NetworkResponse::OpenStreamAck { opened: true })
                     .unwrap();
                 Ok(None)
             }
@@ -174,7 +185,7 @@ impl NodeType for ProviderNode {
                     source
                         .as_ref()
                         .expect("no source from auction start gossip"),
-                );
+                )?;
                 Ok(None)
             }
             (event, _state) => return Ok(Some(event)),

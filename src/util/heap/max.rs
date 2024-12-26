@@ -137,7 +137,7 @@ mod tests {
 
     use libp2p::{identity::Keypair, PeerId};
 
-    use crate::util::behaviour::ProvisionBid;
+    use crate::behaviour::ProvisionBid;
 
     use super::MaxHeap;
 

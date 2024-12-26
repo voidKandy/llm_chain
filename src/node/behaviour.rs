@@ -9,7 +9,7 @@ use libp2p::{
 };
 use std::hash::{DefaultHasher, Hash, Hasher};
 
-use crate::util::behaviour::{
+use crate::behaviour::{
     req_res::{NetworkReqRes, NetworkRequest, NetworkResponse},
     IDENTIFY_ID,
 };
