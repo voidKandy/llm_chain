@@ -12,19 +12,22 @@ use libp2p::{
     gossipsub,
     identity::Keypair,
     swarm::{NetworkBehaviour, Swarm, SwarmEvent},
+    PeerId,
 };
 use seraphic::{
     socket::{self},
     thread::RpcListeningThread,
     ProcessRequestResult, RpcHandler, RpcRequestWrapper,
 };
-use std::{fmt::Debug, time::Duration};
+use std::{collections::HashMap, fmt::Debug, time::Duration};
 use tokio::net::ToSocketAddrs;
 
 pub struct Node<T: NodeType> {
     keys: Keypair,
     rpc_thread: RpcListeningThread,
     blockchain: Blockchain,
+    pub decryption_keys: HashMap<PeerId, String>,
+    pub encryption_keys: HashMap<PeerId, String>,
     pub swarm: Swarm<T::Behaviour>,
     pub inner: T,
 }
@@ -48,6 +51,14 @@ where
     SwarmEvent<<<T as NodeType>::Behaviour as NetworkBehaviour>::ToSwarm>:
         Into<SwarmEvent<NodeBehaviourEvent>>,
 {
+    pub fn create_peer_keypair(&mut self, peer: &PeerId) -> MainResult<Keypair> {
+        let secret = self
+            .keys
+            .derive_secret(&peer.to_bytes())
+            .ok_or(std::io::Error::other("Could not derive secret"))?;
+        Ok(Keypair::ed25519_from_bytes(secret)?)
+    }
+
     pub async fn try_from_keys(keys: Keypair, addr: impl ToSocketAddrs) -> MainResult<Self> {
         let mut swarm = Self::swarm(keys.clone())?;
         let inner = T::init_with_swarm(&mut swarm)?;
@@ -56,6 +67,8 @@ where
             inner,
             swarm,
             blockchain,
+            encryption_keys: HashMap::new(),
+            decryption_keys: HashMap::new(),
             keys,
             rpc_thread: RpcListeningThread::new(addr).await?,
         })
@@ -194,5 +207,17 @@ pub trait NodeType: Debug {
         Self: Sized,
     {
         Ok(OneOf::Left(_r))
+    }
+}
+
+mod tests {
+    use libp2p::{identity::Keypair, PeerId};
+
+    #[test]
+    fn create_key_works() {
+        let keypair = Keypair::generate_ed25519();
+        let peer_id = PeerId::random();
+        let secret = keypair.derive_secret(&peer_id.to_bytes()).unwrap();
+        let newpair = Keypair::ed25519_from_bytes(secret).unwrap();
     }
 }

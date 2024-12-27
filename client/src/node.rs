@@ -22,6 +22,7 @@ use libp2p::{
 use seraphic::{socket, RpcRequestWrapper};
 use serde_json::json;
 use std::time::Duration;
+use tokio::spawn;
 use tracing::warn;
 
 #[derive(Debug)]
@@ -163,10 +164,7 @@ impl NodeType for ClientNode {
         Self: Sized,
     {
         match (_e, &mut node.inner.state) {
-            (
-                SwarmEvent::NewListenAddr { address, .. },
-                State::DirectlyConnected { provider, messages },
-            ) => {
+            (SwarmEvent::NewListenAddr { address, .. }, State::DirectlyConnected { .. }) => {
                 let listen_address = address.with_p2p(*node.swarm.local_peer_id()).unwrap();
                 tracing::info!(%listen_address);
                 Ok(None)
