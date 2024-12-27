@@ -8,6 +8,13 @@ use serde::{Deserialize, Serialize};
 pub const STREAM_PROTOCOL: StreamProtocol = StreamProtocol::new("/echo");
 
 /// https://github.com/libp2p/rust-libp2p/blob/master/examples/stream/src/main.rs
+#[derive(Debug, Deserialize, Serialize)]
+pub enum StreamMessage {
+    Open,
+    Content(String),
+    Close,
+}
+const MESSAGE_SIZE: usize = size_of::<StreamMessage>() + 1;
 
 /// A very simple, `async fn`-based connection handler for our custom echo protocol.
 pub async fn connection_handler(peer: PeerId, mut control: libp2p_stream::Control) {
@@ -39,13 +46,6 @@ pub async fn connection_handler(peer: PeerId, mut control: libp2p_stream::Contro
 }
 
 // this should eventually do inference
-#[derive(Debug, Deserialize, Serialize)]
-enum StreamMessage {
-    Open,
-    Content(String),
-    Close,
-}
-const MESSAGE_SIZE: usize = size_of::<StreamMessage>() + 1;
 
 pub async fn echo(mut stream: Stream) -> std::io::Result<()> {
     // let mut total = 0;
@@ -83,7 +83,7 @@ async fn send(mut stream: Stream) -> std::io::Result<()> {
     // let raw = String::from_utf8_lossy(&buf[..n]);
     // tracing::warn!("raw: {raw}");
     let val: StreamMessage = serde_json::from_slice(&buf[..n])?;
-    tracing::warn!("received {val:?} in echo receive");
+    tracing::warn!("received {val:?} in echo send");
 
     // if bytes != buf {
     //     return Err(std::io::Error::other("incorrect echo"));
